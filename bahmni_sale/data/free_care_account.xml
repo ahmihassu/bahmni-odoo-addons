@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Expense account used when PaymentMethod = Free (100% waiver). -->
+        <record id="account_free_care" model="account.account">
+            <field name="name">Free Care</field>
+            <field name="code">FREECARE</field>
+            <field name="user_type_id" ref="account.data_account_type_expenses"/>
+            <field name="reconcile" eval="False"/>
+        </record>
+    </data>
+</odoo>

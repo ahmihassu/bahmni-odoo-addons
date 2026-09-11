@@ -7,9 +7,13 @@
             <field name="name">Enable default drug Quantity as -1</field>
             <field name="category_id" ref="base.module_category_hidden"/>
         </record>
+        <!-- Auto-create & open invoice on SO confirm (Cash opens Register Payment). -->
         <record id="group_skip_invoice_options" model="res.groups">
-            <field name="name">Skip Invoice Options</field>
+            <field name="name">Auto Invoice on Confirm</field>
             <field name="category_id" ref="base.module_category_hidden"/>
+        </record>
+        <record id="base.group_user" model="res.groups">
+            <field name="implied_ids" eval="[(4, ref('group_skip_invoice_options'))]"/>
         </record>
     </data>
 </odoo>

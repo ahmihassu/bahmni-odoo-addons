@@ -109,6 +109,39 @@ class SaleOrder(models.Model):
     shop_id = fields.Many2one('sale.shop', 'Shop', required=True)
 
 
+    @api.model
+    def default_get(self, fields_list):
+        res = super(SaleOrder, self).default_get(fields_list)
+        user = self.env.user
+        if user.shop_id and (not user.shop_ids or user.shop_id in user.shop_ids):
+            res['shop_id'] = user.shop_id.id
+        elif user.shop_ids:
+            res['shop_id'] = user.shop_ids[0].id
+        return res
+
+    @api.model
+    def create(self, vals):
+        if self.env.user.has_group('bahmni_sale.group_cashier_own_shop'):
+            allowed = self.env.user.shop_ids
+            if not allowed:
+                raise UserError(_(
+                    "Your user has no Shops assigned. Ask an administrator to set "
+                    "Settings → Users → Shops."
+                ))
+            vals = dict(vals or {})
+            shop_id = vals.get('shop_id')
+            if not shop_id or shop_id not in allowed.ids:
+                vals['shop_id'] = allowed[0].id
+        return super(SaleOrder, self).create(vals)
+
+    @api.multi
+    def write(self, vals):
+        if self.env.user.has_group('bahmni_sale.group_cashier_own_shop') and 'shop_id' in vals:
+            allowed_ids = self.env.user.shop_ids.ids
+            if not allowed_ids or vals['shop_id'] not in allowed_ids:
+                raise UserError(_("You can only work on sale orders for your assigned shop(s)."))
+        return super(SaleOrder, self).write(vals)
+
     @api.onchange('order_line')
     def onchange_order_line(self):
         '''Calculate discount amount, when discount is entered in terms of %'''
@@ -185,6 +218,7 @@ class SaleOrder(models.Model):
             'discount_percentage': self.discount_percentage,
             'disc_acc_id': self.disc_acc_id.id,
             'discount': self.discount,
+            'shop_id': self.shop_id.id,
         }
         return invoice_vals
 
@@ -193,43 +227,41 @@ class SaleOrder(models.Model):
     #So Once we Confirm the sale order it will create the invoice and ask for the register payment.
     @api.multi
     def action_confirm(self):
-        res = super(SaleOrder,self).action_confirm()
+        self._bahmni_validate_payment_for_confirm()
+        res = super(SaleOrder, self).action_confirm()
         self.validate_delivery()
         #here we need to set condition for if the its enabled then can continuw owise return True in else condition
         if self.env.user.has_group('bahmni_sale.group_skip_invoice_options'):
+            payment_action = True
             for order in self:
-                inv_data = order._prepare_invoice()
-                created_invoice = self.env['account.invoice'].create(inv_data)
-
-                for line in order.order_line:
-                    line.invoice_line_create(created_invoice.id, line.product_uom_qty)
-
-                # Use additional field helper function (for account extensions)
-                for line in created_invoice.invoice_line_ids:
-                    line._set_additional_fields(created_invoice)
-
-                # Necessary to force computation of taxes. In account_invoice, they are triggered
-                # by onchanges, which are not triggered when doing a create.
-                created_invoice.compute_taxes()
-                created_invoice.message_post_with_view('mail.message_origin_link',
-                    values={'self': created_invoice, 'origin': order},
-                    subtype_id=self.env.ref('mail.mt_note').id)
-                created_invoice.action_invoice_open()#Validate Invoice
-                ctx = dict(
-                default_invoice_ids = [(4, created_invoice.id, None)]
-                )
-                reg_pay_form = self.env.ref('account.view_account_payment_invoice_form')
-                return {
-                    'name': _('Register Payment'),
-                    'type': 'ir.actions.act_window',
-                    'view_type': 'form',
-                    'view_mode': 'form',
-                    'res_model': 'account.payment',
-                    'views': [(reg_pay_form.id, 'form')],
-                    'view_id': reg_pay_form.id,
-                    'target': 'new',
-                    'context': ctx,
-                }
+                created_invoice = order._bahmni_create_and_open_invoice()
+                payment_method = (order.payment_method or '').strip()
+                if payment_method == 'Credit':
+                    created_invoice.message_post(body=_(
+                        "Credit bill: receivable left open on payer '%s'."
+                    ) % (order.payer_partner_id.display_name or order.partner_invoice_id.display_name))
+                    payment_action = {
+                        'type': 'ir.actions.act_window',
+                        'res_model': 'account.invoice',
+                        'view_mode': 'form',
+                        'res_id': created_invoice.id,
+                        'target': 'current',
+                    }
+                elif payment_method == 'Free':
+                    created_invoice.message_post(body=_(
+                        "Free care: no payment collection required."
+                    ))
+                    payment_action = {
+                        'type': 'ir.actions.act_window',
+                        'res_model': 'account.invoice',
+                        'view_mode': 'form',
+                        'res_id': created_invoice.id,
+                        'target': 'current',
+                    }
+                else:
+                    # Cash (default): open Register Payment
+                    payment_action = order._bahmni_register_payment_action(created_invoice)
+            return payment_action
         else:
             return res
 
@@ -237,6 +269,7 @@ class SaleOrder(models.Model):
     #This method will be called when validation is happens from the Bahmni side
     @api.multi
     def auto_validate_delivery(self):
+        self._bahmni_validate_payment_for_confirm()
         super(SaleOrder, self).action_confirm()
         self.validate_delivery()
 
@@ -329,6 +362,35 @@ class SaleOrder(models.Model):
     @api.multi
     def validate_payment(self):
         for obj in self:
+            payment_method = (obj.payment_method or '').strip()
+            if payment_method == 'Credit':
+                obj._bahmni_validate_payment_for_confirm()
+                # Invoice only — leave AR open on the payer.
+                inv_data = obj._prepare_invoice()
+                invoice = self.env['account.invoice'].create(inv_data)
+                for line in obj.order_line:
+                    line.invoice_line_create(invoice.id, line.product_uom_qty)
+                for line in invoice.invoice_line_ids:
+                    line._set_additional_fields(invoice)
+                invoice.compute_taxes()
+                invoice.action_invoice_open()
+                invoice.message_post(body=_(
+                    "Credit bill auto-invoiced without cash payment (payer '%s')."
+                ) % (obj.payer_partner_id.display_name or '-'))
+                continue
+            if payment_method == 'Free':
+                obj._bahmni_apply_free_care_discount()
+                inv_data = obj._prepare_invoice()
+                invoice = self.env['account.invoice'].create(inv_data)
+                for line in obj.order_line:
+                    line.invoice_line_create(invoice.id, line.product_uom_qty)
+                for line in invoice.invoice_line_ids:
+                    line._set_additional_fields(invoice)
+                invoice.compute_taxes()
+                invoice.action_invoice_open()
+                invoice.message_post(body=_("Free care auto-invoiced; no payment collected."))
+                continue
+
             ctx = {'active_ids': [obj.id]}
             default_vals = self.env['sale.advance.payment.inv'
                                         ].with_context(ctx).default_get(['count', 'deposit_taxes_id',

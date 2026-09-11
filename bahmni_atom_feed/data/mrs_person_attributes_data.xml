@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data noupdate="1">
+        <!-- Default whitelist for OpenMRS person attributes synced to Odoo.
+             Upgrades also merge via bahmni.default.shop.setup.ensure_payment_attribute_whitelist. -->
         <record id="openmrs_patient_attributes" model="ir.config_parameter">
             <field name="key">openmrs_patient_attributes</field>
-            <field name="value">,</field>
+            <field name="value">PaymentMethod,Credit Information,Credit Companies,Free,InsuranceID,InsuranceName,InsuranceCode,InsuranceZone,InsuranceExpiryDate,CBHI ID,CBHIExpiryDate,CBHI Region,CBHI Zone,CBHI Woreda</field>
         </record>
     </data>
 </odoo>

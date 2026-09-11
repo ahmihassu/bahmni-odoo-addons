@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Bahmni Sale',
-    'version': '1.0',
+    'version': '1.4',
     'summary': 'Custom Sales module to meet bahmni requirement',
     'sequence': 1,
     'description': """
@@ -14,10 +14,13 @@ Bahmni Sale
     'depends': ['sale', 'sale_stock','sales_team', 'bahmni_account','point_of_sale','account'],
     'data': ['security/ir.model.access.csv',
              'security/security_groups.xml',
+             'security/sale_shop_cashier_security.xml',
              'data/data.xml',
+             'data/free_care_account.xml',
              'data/sale_config_setting.xml',
              'views/bahmni_sale.xml',
              'views/res_partner_view.xml',
+             'views/res_users_view.xml',
              'views/village_master_view.xml',
              'views/sale_order_views.xml',
              'views/sale_config_settings.xml',

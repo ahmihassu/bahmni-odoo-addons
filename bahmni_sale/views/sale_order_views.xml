@@ -16,6 +16,13 @@
 			</xpath>
 			<xpath expr="//field[@name='payment_term_id']" position="after">
 				<field name="shop_id"/>
+				<field name="payment_method"/>
+				<field name="payer_partner_id"
+					attrs="{'invisible': [('payment_method', '!=', 'Credit')]}"/>
+				<field name="credit_information"
+					attrs="{'invisible': [('payment_method', '!=', 'Credit')]}"/>
+				<field name="free_reason"
+					attrs="{'invisible': [('payment_method', '!=', 'Free')]}"/>
 			</xpath>
 			<xpath expr="//notebook/page[1]/group" position="replace">
 				<div class="col-xs-5 pull-right text-right" style="padding-right:0px">

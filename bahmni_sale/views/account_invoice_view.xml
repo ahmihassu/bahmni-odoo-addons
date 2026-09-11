@@ -7,6 +7,15 @@
 		<field name="arch" type="xml">
 			<xpath expr="//field[@name='date_invoice']" position="after">
 				<field name="shop_id"/>
+				<field name="payment_method"/>
+				<field name="patient_partner_id"
+					attrs="{'invisible': [('patient_partner_id', '=', False)]}"/>
+				<field name="payer_partner_id"
+					attrs="{'invisible': [('payment_method', '!=', 'Credit')]}"/>
+				<field name="credit_information"
+					attrs="{'invisible': [('payment_method', '!=', 'Credit')]}"/>
+				<field name="free_reason"
+					attrs="{'invisible': [('payment_method', '!=', 'Free')]}"/>
 			</xpath>
 		</field>
 	</record>
