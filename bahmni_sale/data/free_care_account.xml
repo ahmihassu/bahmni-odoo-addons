@@ -1,10 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
     <data noupdate="1">
-        <!-- Expense account used when PaymentMethod = Free (100% waiver). -->
+        <!--
+            Expense account for PaymentMethod = Free (100% waiver).
+            Requires a company chart of accounts first (e.g. l10n_et).
+            Code 629000 matches Ethiopia template padding (code_digits=6).
+
+            IMPORTANT: Do not install this before loading a CoA — any existing
+            account.account blocks wizard.multi.charts.accounts.execute().
+            On DBs where CoA was loaded first, this xmlid is safe to create.
+        -->
         <record id="account_free_care" model="account.account">
-            <field name="name">Free Care</field>
-            <field name="code">FREECARE</field>
+            <field name="name">Free Care / Charity</field>
+            <field name="code">629000</field>
             <field name="user_type_id" ref="account.data_account_type_expenses"/>
             <field name="reconcile" eval="False"/>
         </record>

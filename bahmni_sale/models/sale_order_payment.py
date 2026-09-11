@@ -98,7 +98,39 @@ class SaleOrder(models.Model):
 
     @api.multi
     def _bahmni_get_free_care_account(self):
-        return self.env.ref('bahmni_sale.account_free_care', raise_if_not_found=False)
+        """Return Free Care expense account; create 629000 if CoA exists but xmlid missing."""
+        acc = self.env.ref('bahmni_sale.account_free_care', raise_if_not_found=False)
+        if acc:
+            return acc
+        company = self.env.user.company_id
+        if not company.chart_template_id:
+            return self.env['account.account']
+        Account = self.env['account.account'].sudo()
+        acc = Account.search([
+            ('code', 'in', ['629000', '6290']),
+            ('company_id', '=', company.id),
+        ], limit=1)
+        if not acc:
+            acc = Account.create({
+                'code': '629000',
+                'name': 'Free Care / Charity',
+                'user_type_id': self.env.ref('account.data_account_type_expenses').id,
+                'reconcile': False,
+                'company_id': company.id,
+            })
+        # Bind xmlid so later lookups are stable.
+        if not self.env['ir.model.data'].sudo().search([
+            ('module', '=', 'bahmni_sale'),
+            ('name', '=', 'account_free_care'),
+        ], limit=1):
+            self.env['ir.model.data'].sudo().create({
+                'module': 'bahmni_sale',
+                'name': 'account_free_care',
+                'model': 'account.account',
+                'res_id': acc.id,
+                'noupdate': True,
+            })
+        return acc
 
     @api.multi
     def _bahmni_apply_free_care_discount(self):
@@ -154,10 +186,33 @@ class SaleOrder(models.Model):
         invoice.action_invoice_open()
         return invoice
 
+    @api.model
+    def _bahmni_get_default_cash_journal(self):
+        """Company cash journal used for Cash PaymentMethod collections."""
+        company = self.env.user.company_id
+        Journal = self.env['account.journal']
+        journal = Journal.search([
+            ('type', '=', 'cash'),
+            ('company_id', '=', company.id),
+        ], order='id asc', limit=1)
+        if not journal:
+            raise UserError(_(
+                "No cash payment journal found for company '%s'. "
+                "Create a Cash journal under Accounting → Configuration → Journals "
+                "(with a default cash account), then try again."
+            ) % (company.display_name,))
+        return journal
+
     @api.multi
     def _bahmni_register_payment_action(self, invoice):
         self.ensure_one()
-        ctx = dict(default_invoice_ids=[(4, invoice.id, None)])
+        cash_journal = self._bahmni_get_default_cash_journal()
+        ctx = dict(
+            default_invoice_ids=[(4, invoice.id, None)],
+            default_journal_id=cash_journal.id,
+            default_payment_type='inbound',
+            default_partner_type='customer',
+        )
         reg_pay_form = self.env.ref('account.view_account_payment_invoice_form')
         return {
             'name': _('Register Payment'),

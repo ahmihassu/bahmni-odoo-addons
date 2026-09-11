@@ -4,3 +4,5 @@ access_village_village,access_village_village,model_village_village,,1,1,1,1
 access_state_district,access_state_district,model_state_district,,1,1,1,1
 access_district_tehsil,access_district_tehsil,model_district_tehsil,,1,1,1,1
 access_res_partner_attributes,access_res_partner_attributes,model_res_partner_attributes,base.group_user,1,1,1,1
+access_bahmni_cbhi_claim_export,access_bahmni_cbhi_claim_export,model_bahmni_cbhi_claim_export,account.group_account_invoice,1,1,1,1
+access_bahmni_cbhi_claim_export_manager,access_bahmni_cbhi_claim_export_manager,model_bahmni_cbhi_claim_export,sales_team.group_sale_manager,1,1,1,1

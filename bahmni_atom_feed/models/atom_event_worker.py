@@ -183,6 +183,14 @@ class AtomEventWorker(models.Model):
                     'name': vals.get('name'),
                     'local_name': vals.get('local_name'),
                     'uuid': vals.get('uuid')})
+        if vals.get('gender'):
+            res['gender'] = vals.get('gender')
+        if vals.get('birthdate'):
+            # erp-connect sends yyyy-MM-dd
+            birthdate = vals.get('birthdate')
+            if birthdate and 'T' in str(birthdate):
+                birthdate = str(birthdate).split('T')[0]
+            res['birthdate'] = birthdate
         address_data = vals.get('preferredAddress')
         # get validated address details
         address_details = self._get_address_details(json.loads(address_data))

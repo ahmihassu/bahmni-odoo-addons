@@ -49,6 +49,18 @@ class SaleOrderLine(models.Model):
         return None
     
     @api.multi
+    def _prepare_invoice_line(self, qty):
+        """Prefer the shop income account when configured on the order's shop."""
+        self.ensure_one()
+        res = super(SaleOrderLine, self)._prepare_invoice_line(qty)
+        shop = self.order_id.shop_id
+        if shop and shop.income_account_id:
+            account = shop._bahmni_map_income_account(self.order_id.fiscal_position_id)
+            if account:
+                res['account_id'] = account.id
+        return res
+
+    @api.multi
     def invoice_line_create(self, invoice_id, qty):
         """
         Create an invoice line. The quantity to invoice can be positive (invoice) or negative
