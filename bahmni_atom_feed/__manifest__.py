@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Bahmni Atom Feed',
-    'version': '1.0',
+    'version': '1.1',
     'summary': 'Module to sync Bahmni with Odoo',
     'sequence': 1,
     'description': """
@@ -14,6 +14,8 @@ Bahmni Web Extension
     'depends': ['web', 'bahmni_product', 'bahmni_sale'],
     'data': ['security/ir.model.access.csv',
          'data/mrs_person_attributes_data.xml',
+         'data/order_type_data.xml',
+         'data/ensure_default_shops.xml',
 	     'views/event_records_view.xml',
              'views/res_company.xml',
              'wizard/stock_location_product_dhis2.xml',
