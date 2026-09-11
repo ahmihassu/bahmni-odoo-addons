@@ -11,3 +11,5 @@ import res_company
 import pos
 import account_invoice
 import shop
+import mail_message
+

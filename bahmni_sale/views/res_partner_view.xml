@@ -24,6 +24,8 @@ and in case user exactly don't know the position, he/she will need to search for
             <xpath expr="//field[@name='lang']" position="after">
                 <field name="uuid" invisible = "1"/>
                 <field name="is_bahmni_payer" invisible="1"/>
+                <field name="gender" readonly="1"/>
+                <field name="birthdate" readonly="1"/>
             </xpath>
             <xpath expr="//form/sheet/notebook" position="inside">
                 <page string="Payment Information">

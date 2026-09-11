@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Bahmni Atom Feed',
-    'version': '1.5',
+    'version': '1.7',
     'summary': 'Module to sync Bahmni with Odoo',
     'sequence': 1,
     'description': """

@@ -15,6 +15,19 @@ class ResPartner(models.Model):
     local_name = fields.Char(string="Local Name")
     uuid = fields.Char(string = "UUID")
     attribute_ids = fields.One2many('res.partner.attributes', 'partner_id', string='Attributes')
+    # Synced from OpenMRS person (via erp-connect create.customer).
+    gender = fields.Char(
+        string="Gender",
+        readonly=True,
+        copy=False,
+        help="OpenMRS person.gender (M/F).",
+    )
+    birthdate = fields.Date(
+        string="Birthdate",
+        readonly=True,
+        copy=False,
+        help="OpenMRS person.birthdate.",
+    )
 
     # Synced from OpenMRS person attributes (source of truth). Cashiers must not edit.
     payment_method = fields.Char(string="Payment Method", readonly=True, copy=False,

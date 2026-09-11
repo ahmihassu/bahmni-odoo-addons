@@ -14,6 +14,23 @@ class AccountAbstractPayment(models.AbstractModel):
 class AccountPayment(models.Model):
     _inherit = 'account.payment'
 
+    @api.model
+    def default_get(self, fields_list):
+        """Prefer Cash journal for customer inbound payments (hospital cashiers)."""
+        rec = super(AccountPayment, self).default_get(fields_list)
+        need_journal = (not fields_list) or ('journal_id' in fields_list)
+        if need_journal and not rec.get('journal_id'):
+            payment_type = rec.get('payment_type') or self.env.context.get('default_payment_type')
+            partner_type = rec.get('partner_type') or self.env.context.get('default_partner_type')
+            if payment_type in (False, 'inbound') and partner_type in (False, 'customer'):
+                cash = self.env['account.journal'].search([
+                    ('type', '=', 'cash'),
+                    ('company_id', '=', self.env.user.company_id.id),
+                ], order='id asc', limit=1)
+                if cash:
+                    rec['journal_id'] = cash.id
+        return rec
+
     @api.onchange('partner_id', 'amount')
     def _calculate_balances(self):
         if(self.state != 'posted'):

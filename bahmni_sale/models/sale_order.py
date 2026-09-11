@@ -405,18 +405,28 @@ class SaleOrder(models.Model):
                 elif inv.amount_total > 0:
                     account_payment_env = self.env['account.payment']
                     fields = account_payment_env.fields_get().keys()
-                    default_fields = account_payment_env.with_context({'default_invoice_ids': [(4, inv.id, None)]}).default_get(fields)
-                    journal_id = self.env['account.journal'].search([('type', '=', 'cash')],
-                                                                    limit=1)
-                    default_fields.update({'journal_id': journal_id.id})
-                    payment_method_ids = self.env['account.payment.method'
-                                                  ].search([('payment_type', '=', default_fields.get('payment_type'))]).ids
+                    default_fields = account_payment_env.with_context({
+                        'default_invoice_ids': [(4, inv.id, None)],
+                    }).default_get(fields)
+                    journal = obj._bahmni_get_default_cash_journal()
+                    default_fields.update({'journal_id': journal.id})
+                    payment_method_ids = self.env['account.payment.method'].search([
+                        ('payment_type', '=', default_fields.get('payment_type')),
+                    ]).ids
                     if default_fields.get('payment_type') == 'inbound':
-                        journal_payment_methods = journal_id.inbound_payment_method_ids.ids
+                        journal_payment_methods = journal.inbound_payment_method_ids.ids
                     elif default_fields.get('payment_type') == 'outbound':
-                        journal_payment_methods = journal_id.outbound_payment_method_ids.ids
-                    common_payment_method = list(set(payment_method_ids).intersection(set(journal_payment_methods)))
+                        journal_payment_methods = journal.outbound_payment_method_ids.ids
+                    else:
+                        journal_payment_methods = []
+                    common_payment_method = list(
+                        set(payment_method_ids).intersection(set(journal_payment_methods)))
                     common_payment_method.sort()
+                    if not common_payment_method:
+                        raise UserError(_(
+                            "Cash journal '%s' has no payment method configured "
+                            "for this payment type."
+                        ) % journal.display_name)
                     default_fields.update({'payment_method_id': common_payment_method[0]})
                     account_payment = account_payment_env.create(default_fields)
                     account_payment.post()

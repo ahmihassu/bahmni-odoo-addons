@@ -176,8 +176,10 @@ class DefaultShopSetup(models.Model):
         Shop = self.env['sale.shop'].sudo()
         group_cashier = self.env.ref(
             'bahmni_sale.group_cashier_own_shop', raise_if_not_found=False)
-        group_invoice = self.env.ref(
+        group_auto_inv = self.env.ref(
             'bahmni_sale.group_skip_invoice_options', raise_if_not_found=False)
+        group_billing = self.env.ref(
+            'account.group_account_invoice', raise_if_not_found=False)
         if not group_cashier:
             _logger.warning("Cashier shop group missing; skip demo cashier creation")
             return True
@@ -195,8 +197,10 @@ class DefaultShopSetup(models.Model):
         )
         password = 'Cashier@123'
         group_ids = [group_cashier.id]
-        if group_invoice:
-            group_ids.append(group_invoice.id)
+        if group_auto_inv:
+            group_ids.append(group_auto_inv.id)
+        if group_billing:
+            group_ids.append(group_billing.id)
 
         for login, name, shop_names in cashiers:
             shops = Shop.search([('name', 'in', list(shop_names))])
