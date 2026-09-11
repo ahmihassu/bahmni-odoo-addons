@@ -17,7 +17,10 @@ class SaleAdvancePaymentInv(models.TransientModel):
         ir_property_obj = self.env['ir.property']
 
         account_id = False
-        if self.product_id.id:
+        if order.shop_id and order.shop_id.income_account_id:
+            account = order.shop_id._bahmni_map_income_account(order.fiscal_position_id)
+            account_id = account.id if account else False
+        if not account_id and self.product_id.id:
             account_id = self.product_id.property_account_income_id.id
         if not account_id:
             inc_acc = ir_property_obj.get('property_account_income_categ_id', 'product.category')

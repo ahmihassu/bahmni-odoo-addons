@@ -13,6 +13,15 @@ DEFAULT_SHOP_ORDER_TYPES = (
     ('Procedure', 'Procedure Order'),
 )
 
+# Shop name → (account code, account name). Codes use 6 digits for Ethiopia CoA.
+# Sub-accounts under 110000 Sales of Goods and Services.
+DEFAULT_SHOP_INCOME_ACCOUNTS = {
+    'MRU': ('110100', 'MRU / Registration Income'),
+    'Laboratory': ('110200', 'Laboratory Income'),
+    'Radiology': ('110300', 'Radiology Income'),
+    'Procedure': ('110400', 'Procedure Income'),
+}
+
 
 class DefaultShopSetup(models.Model):
     """Ensure default shops, order types, and mappings exist for each company."""
@@ -50,6 +59,57 @@ class DefaultShopSetup(models.Model):
         if not warehouse:
             warehouse = Warehouse.search([], order='id', limit=1)
         return warehouse
+
+    @api.model
+    def _ensure_shop_income_account(self, shop, company):
+        """Create/find a dedicated income account for the shop and link it if unset.
+
+        Requires a loaded CoA. Does not overwrite an income account already set on the shop.
+        """
+        if shop.income_account_id:
+            return shop.income_account_id
+        if not company.chart_template_id:
+            _logger.info(
+                "Skip income account for shop '%s': company '%s' has no chart of accounts",
+                shop.name,
+                company.name,
+            )
+            return self.env['account.account']
+
+        mapping = DEFAULT_SHOP_INCOME_ACCOUNTS.get(shop.name)
+        if not mapping:
+            return self.env['account.account']
+
+        code, name = mapping
+        Account = self.env['account.account'].sudo()
+        account = Account.search([
+            ('code', '=', code),
+            ('company_id', '=', company.id),
+        ], limit=1)
+        if not account:
+            revenue_type = self.env.ref(
+                'account.data_account_type_revenue', raise_if_not_found=False)
+            if not revenue_type:
+                _logger.warning(
+                    "Cannot create income account %s: revenue account type missing", code)
+                return self.env['account.account']
+            account = Account.create({
+                'code': code,
+                'name': name,
+                'user_type_id': revenue_type.id,
+                'reconcile': False,
+                'company_id': company.id,
+            })
+            _logger.info(
+                "Created income account %s %s for shop '%s'",
+                code, name, shop.name,
+            )
+        shop.income_account_id = account.id
+        _logger.info(
+            "Linked shop '%s' → income account %s %s",
+            shop.name, account.code, account.name,
+        )
+        return account
 
     @api.model
     def ensure_payment_attribute_whitelist(self):
@@ -147,6 +207,8 @@ class DefaultShopSetup(models.Model):
                     )
                 elif not shop.company_id:
                     shop.company_id = company.id
+
+                self._ensure_shop_income_account(shop, company)
 
                 # Default map: order type with no OpenMRS location filter.
                 # Only one such map should exist per order type (atom feed takes the first).
