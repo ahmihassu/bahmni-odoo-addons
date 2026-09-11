@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Bahmni Sale',
-    'version': '1.8',
+    'version': '1.9',
     'summary': 'Custom Sales module to meet bahmni requirement',
     'sequence': 1,
     'description': """
@@ -29,7 +29,8 @@ Bahmni Sale
              'views/sale_config_settings.xml',
 	     'views/pos_view.xml',
              'views/account_invoice_view.xml',
-             'wizard/cbhi_claim_export_view.xml'],
+             'wizard/cbhi_claim_export_view.xml',
+             'wizard/paid_payments_export_view.xml'],
     'demo': [],
     'qweb': [],
     'installable': True,
