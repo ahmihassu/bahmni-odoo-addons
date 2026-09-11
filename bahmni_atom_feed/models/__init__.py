@@ -11,3 +11,4 @@ import syncable_units_mapping
 import atom_feed_marker
 import order_save_service
 import order_type_shop_map
+import default_shop_setup

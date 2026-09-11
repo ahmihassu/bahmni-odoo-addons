@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Runs on every install/upgrade so missing shops/maps are created after deploy. -->
+    <data noupdate="0">
+        <function model="bahmni.default.shop.setup" name="ensure_default_shops_and_order_types"/>
+    </data>
+</odoo>
