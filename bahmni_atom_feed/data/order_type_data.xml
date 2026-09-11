@@ -5,7 +5,7 @@
             <field name="name">Registration Fee</field>
         </record>
         <record id="order_type_laboratory_order" model="order.type">
-            <field name="name">Laboratory Order</field>
+            <field name="name">Lab Order</field>
         </record>
         <record id="order_type_radiology_order" model="order.type">
             <field name="name">Radiology Order</field>

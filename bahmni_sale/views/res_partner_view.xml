@@ -23,6 +23,7 @@ and in case user exactly don't know the position, he/she will need to search for
 			</xpath>
             <xpath expr="//field[@name='lang']" position="after">
                 <field name="uuid" invisible = "1"/>
+                <field name="is_bahmni_payer" invisible="1"/>
             </xpath>
             <xpath expr="//form/sheet/notebook" position="inside">
                 <page string="Payment Information">
@@ -51,6 +52,12 @@ and in case user exactly don't know the position, he/she will need to search for
                             <field name="cbhi_region"/>
                             <field name="cbhi_zone"/>
                             <field name="cbhi_woreda"/>
+                        </group>
+                        <group string="Payer Master"
+                               attrs="{'invisible': [('is_bahmni_payer', '=', False)]}">
+                            <field name="is_bahmni_payer"/>
+                            <field name="bahmni_payer_type"/>
+                            <field name="bahmni_payer_needs_review"/>
                         </group>
                     </group>
                 </page>

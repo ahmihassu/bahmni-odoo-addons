@@ -246,3 +246,5 @@ class AtomEventWorker(models.Model):
 
         # sudo: fields are readonly for cashiers; atom feed must still write them.
         Partner.write(partner_field_vals)
+        # Draft SOs snapshot payment at create; refresh them after OpenMRS corrections.
+        Partner.bahmni_refresh_draft_sale_orders_payment()
