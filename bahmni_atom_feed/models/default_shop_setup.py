@@ -52,8 +52,33 @@ class DefaultShopSetup(models.Model):
         return warehouse
 
     @api.model
+    def ensure_payment_attribute_whitelist(self):
+        """Merge payment-related OpenMRS attributes into the sync whitelist.
+
+        The config parameter is noupdate=1, so upgrades must merge explicitly
+        without wiping any facility-specific extras already configured.
+        """
+        from odoo.addons.bahmni_atom_feed.models.payment_attributes import PAYMENT_PERSON_ATTRIBUTES
+
+        param = self.env.ref('bahmni_atom_feed.openmrs_patient_attributes', raise_if_not_found=False)
+        if not param:
+            _logger.warning("openmrs_patient_attributes config parameter not found")
+            return True
+        current = [s.strip() for s in (param.value or '').split(',') if s.strip()]
+        updated = False
+        for attr in PAYMENT_PERSON_ATTRIBUTES:
+            if attr not in current:
+                current.append(attr)
+                updated = True
+        if updated:
+            param.write({'value': ','.join(current)})
+            _logger.info("Updated openmrs_patient_attributes whitelist: %s", param.value)
+        return True
+
+    @api.model
     def ensure_default_shops_and_order_types(self):
         """Create missing order types, shops, and default shop maps (idempotent)."""
+        self.ensure_payment_attribute_whitelist()
         payment_term = self._get_immediate_payment_term()
         OrderType = self.env['order.type']
         SaleShop = self.env['sale.shop']

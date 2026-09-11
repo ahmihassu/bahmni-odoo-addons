@@ -25,8 +25,37 @@ and in case user exactly don't know the position, he/she will need to search for
                 <field name="uuid" invisible = "1"/>
             </xpath>
             <xpath expr="//form/sheet/notebook" position="inside">
+                <page string="Payment Information">
+                    <group>
+                        <group string="Payment Method">
+                            <field name="payment_method"/>
+                            <field name="credit_information"
+                                    attrs="{'invisible': [('payment_method', '!=', 'Credit')]}"/>
+                            <field name="credit_companies"
+                                    attrs="{'invisible': [('credit_information', '!=', 'Credit Companies')]}"/>
+                            <field name="free_reason"
+                                    attrs="{'invisible': [('payment_method', '!=', 'Free')]}"/>
+                        </group>
+                        <group string="Insurance"
+                               attrs="{'invisible': [('credit_information', '!=', 'Insurance')]}">
+                            <field name="insurance_name"/>
+                            <field name="insurance_id"/>
+                            <field name="insurance_code"/>
+                            <field name="insurance_zone"/>
+                            <field name="insurance_expiry_date"/>
+                        </group>
+                        <group string="CBHI"
+                               attrs="{'invisible': [('credit_information', '!=', 'CBHI')]}">
+                            <field name="cbhi_id"/>
+                            <field name="cbhi_expiry_date"/>
+                            <field name="cbhi_region"/>
+                            <field name="cbhi_zone"/>
+                            <field name="cbhi_woreda"/>
+                        </group>
+                    </group>
+                </page>
                 <page string="Additional Info">
-                    <field name="attribute_ids">
+                    <field name="attribute_ids" readonly="1">
                       <tree name="Addition Info">
                          <field name="name"/>
                          <field name="value"/>

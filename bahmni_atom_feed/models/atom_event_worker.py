@@ -193,16 +193,56 @@ class AtomEventWorker(models.Model):
             res.update({'phone': vals['primaryContact']})
         return res
         
+    def _normalize_attribute_value(self, value):
+        """OpenMRS may send a plain string or a small dict with display/value."""
+        if value is None:
+            return False
+        if isinstance(value, dict):
+            return value.get('value') or value.get('display') or value.get('name') or False
+        return value
+
     def _create_or_update_person_attributes(self, cust_id, vals):#TODO whole method
-        attributes = json.loads(vals.get("attributes", "{}"))
+        from odoo.addons.bahmni_atom_feed.models.payment_attributes import (
+            PAYMENT_ATTR_FIELD_MAP,
+            PAYMENT_PERSON_ATTRIBUTES,
+        )
+
+        attributes = json.loads(vals.get("attributes", "{}") or "{}")
         openmrs_patient_attributes = str(self.env.ref('bahmni_atom_feed.openmrs_patient_attributes').value)
-        openmrs_attributes_list = filter(lambda s: len(s) > 0, map(str.strip, openmrs_patient_attributes.split(',')))
+        openmrs_attributes_list = list(filter(lambda s: len(s) > 0, map(str.strip, openmrs_patient_attributes.split(','))))
         _logger.info("\n List of Patient Attributes to Sync = %s", openmrs_attributes_list)
+
+        Partner = self.env['res.partner'].browse(cust_id).sudo()
+        Attributes = self.env['res.partner.attributes']
+
+        # Start from a clean payment classification on every patient event so a
+        # change e.g. Credit/CBHI → Cash does not leave stale subtype fields.
+        partner_field_vals = {field: False for field in PAYMENT_ATTR_FIELD_MAP.values()}
+        stale_payment_attrs = Attributes.search([
+            ('partner_id', '=', cust_id),
+            ('name', 'in', list(PAYMENT_PERSON_ATTRIBUTES)),
+        ])
+        if stale_payment_attrs:
+            stale_payment_attrs.unlink()
+
         for key in attributes:
             if key in openmrs_attributes_list:
-                column_dict = {'partner_id': cust_id}
-                existing_attribute = self.env['res.partner.attributes'].search([('partner_id', '=', cust_id),('name', '=', key)])
+                normalized = self._normalize_attribute_value(attributes[key])
+                existing_attribute = Attributes.search([
+                    ('partner_id', '=', cust_id),
+                    ('name', '=', key),
+                ])
                 if any(existing_attribute):
                     existing_attribute.unlink()
-                column_dict.update({"name": key, "value" : attributes[key]})
-                self.env['res.partner.attributes'].create(column_dict)
+                # Char size on attributes is 128; coerce to string for storage.
+                stored_value = normalized if normalized is False else str(normalized)
+                Attributes.create({
+                    'partner_id': cust_id,
+                    'name': key,
+                    'value': stored_value or False,
+                })
+                if key in PAYMENT_ATTR_FIELD_MAP:
+                    partner_field_vals[PAYMENT_ATTR_FIELD_MAP[key]] = stored_value or False
+
+        # sudo: fields are readonly for cashiers; atom feed must still write them.
+        Partner.write(partner_field_vals)

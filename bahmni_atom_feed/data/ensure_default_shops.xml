@@ -2,6 +2,7 @@
 <odoo>
     <!-- Runs on every install/upgrade so missing shops/maps are created after deploy. -->
     <data noupdate="0">
+        <function model="bahmni.default.shop.setup" name="ensure_payment_attribute_whitelist"/>
         <function model="bahmni.default.shop.setup" name="ensure_default_shops_and_order_types"/>
     </data>
 </odoo>
