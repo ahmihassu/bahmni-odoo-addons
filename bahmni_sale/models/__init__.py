@@ -11,6 +11,8 @@ import res_company
 import pos
 import account_invoice
 import account_invoice_line
+import account_payment
+import ir_ui_menu
 import shop
 import mail_message
 

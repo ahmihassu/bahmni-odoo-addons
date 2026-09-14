@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
 
-from odoo import models, fields, api
+from odoo import models, fields, api, _
 from odoo.tools import DEFAULT_SERVER_DATETIME_FORMAT as DTF, float_is_zero
+from odoo.tools.float_utils import float_compare
 
 
 class SaleOrderLine(models.Model):
@@ -18,13 +19,73 @@ class SaleOrderLine(models.Model):
                                help="Flag to identify whether drug order is dispensed or not.")
     lot_id = fields.Many2one('stock.production.lot', string="Batch No")
     expiry_date = fields.Datetime(string="Expiry date")
-    
+
+    def _bahmni_check_cashier_line_restrictions(self, vals, existing=None):
+        """Block cashiers from changing unit price or line discount."""
+        Users = self.env['res.users']
+        if 'price_unit' in vals:
+            if existing is None:
+                Users.bahmni_cashier_raise_if_restricted(
+                    'bahmni_sale.group_allow_edit_price',
+                    _("Cashiers are not allowed to edit product prices. "
+                      "Ask a sales manager if a price change is required."),
+                )
+            else:
+                precision = self.env['decimal.precision'].precision_get('Product Price')
+                for line in existing:
+                    if float_compare(line.price_unit, vals['price_unit'],
+                                     precision_digits=precision) != 0:
+                        Users.bahmni_cashier_raise_if_restricted(
+                            'bahmni_sale.group_allow_edit_price',
+                            _("Cashiers are not allowed to edit product prices. "
+                              "Ask a sales manager if a price change is required."),
+                        )
+                        break
+        if 'discount' in vals:
+            if existing is None:
+                if vals.get('discount'):
+                    Users.bahmni_cashier_raise_if_restricted(
+                        'bahmni_sale.group_allow_apply_discount',
+                        _("Cashiers are not allowed to apply discounts. "
+                          "Ask a sales manager if a discount is required."),
+                    )
+            else:
+                precision = self.env['decimal.precision'].precision_get('Discount')
+                for line in existing:
+                    new_disc = vals['discount']
+                    if float_compare(line.discount, new_disc, precision_digits=precision) != 0:
+                        Users.bahmni_cashier_raise_if_restricted(
+                            'bahmni_sale.group_allow_apply_discount',
+                            _("Cashiers are not allowed to apply discounts. "
+                              "Ask a sales manager if a discount is required."),
+                        )
+                        break
+
+    @api.model
+    def create(self, vals):
+        # Allow default price from product onchain; only block explicit non-default
+        # price edits on write. On create, still block explicit discount.
+        if 'discount' in vals and vals.get('discount'):
+            self.env['res.users'].bahmni_cashier_raise_if_restricted(
+                'bahmni_sale.group_allow_apply_discount',
+                _("Cashiers are not allowed to apply discounts. "
+                  "Ask a sales manager if a discount is required."),
+            )
+        return super(SaleOrderLine, self).create(vals)
+
+    @api.multi
+    def write(self, vals):
+        self._bahmni_check_cashier_line_restrictions(vals, existing=self)
+        return super(SaleOrderLine, self).write(vals)
+
     @api.onchange('lot_id')
     def onchange_lot_id(self):
         if self.lot_id:
             self.expiry_date = self.lot_id.life_date
             if self.env.ref('bahmni_sale.sale_price_basedon_cost_price_markup').value == '1':
-                self.price_unit = self.lot_id.sale_price if self.lot_id.sale_price > 0.0 else self.price_unit
+                if not self.env['res.users'].bahmni_is_restricted_cashier(
+                        'bahmni_sale.group_allow_edit_price'):
+                    self.price_unit = self.lot_id.sale_price if self.lot_id.sale_price > 0.0 else self.price_unit
 
     @api.model
     def get_available_batch_details(self, product_id, sale_order):

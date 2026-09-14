@@ -90,10 +90,32 @@ class PaidPaymentsExport(models.TransientModel):
     row_count = fields.Integer(string="Rows included", readonly=True)
     total_amount = fields.Float(string="Total amount", readonly=True)
 
+    @api.model
+    def default_get(self, fields_list):
+        res = super(PaidPaymentsExport, self).default_get(fields_list)
+        user = self.env.user
+        if user.bahmni_is_restricted_cashier() and user.shop_ids:
+            if not res.get('shop_id'):
+                res['shop_id'] = (user.shop_id.id
+                                  if user.shop_id and user.shop_id in user.shop_ids
+                                  else user.shop_ids[0].id)
+        return res
+
     @api.onchange('payment_method')
     def _onchange_payment_method(self):
         if self.payment_method != 'Credit':
             self.credit_information = 'all'
+
+    @api.onchange('shop_id')
+    def _onchange_shop_id_cashier(self):
+        user = self.env.user
+        if user.bahmni_is_restricted_cashier():
+            return {
+                'domain': {
+                    'shop_id': [('id', 'in', user.shop_ids.ids)],
+                }
+            }
+        return {}
 
     @api.multi
     def action_generate_excel(self):
@@ -180,9 +202,27 @@ class PaidPaymentsExport(models.TransientModel):
         return [('payment_method', '=', self.payment_method)]
 
     def _shop_domain(self):
+        user = self.env.user
+        if user.bahmni_is_restricted_cashier():
+            allowed_ids = user.shop_ids.ids
+            if not allowed_ids:
+                raise UserError(_(
+                    "Your user has no Shops assigned. Ask an administrator to set "
+                    "Settings → Users → Shops."
+                ))
+            if self.shop_id:
+                if self.shop_id.id not in allowed_ids:
+                    raise UserError(_(
+                        "Cashiers can only export payments for their assigned shop(s)."
+                    ))
+                return [('shop_id', '=', self.shop_id.id)]
+            return [('shop_id', 'in', allowed_ids)]
         if not self.shop_id:
             return []
         return [('shop_id', '=', self.shop_id.id)]
+
+    def _cashier_own_records_only(self):
+        return self.env.user.bahmni_is_restricted_cashier()
 
     def _collect_rows(self, date_start, date_end):
         if self.date_basis == 'payment':
@@ -206,6 +246,8 @@ class PaidPaymentsExport(models.TransientModel):
         ]
         if self.journal_id:
             domain.append(('journal_id', '=', self.journal_id.id))
+        if self._cashier_own_records_only():
+            domain.append(('create_uid', '=', self.env.user.id))
 
         payments = Payment.search(domain, order='payment_date asc, id asc')
         rows = []
@@ -248,6 +290,8 @@ class PaidPaymentsExport(models.TransientModel):
             ('company_id', '=', self.company_id.id),
         ]
         domain.extend(self._shop_domain())
+        if self._cashier_own_records_only():
+            domain.append(('create_uid', '=', self.env.user.id))
         if force_methods:
             domain.append(('payment_method', 'in', list(force_methods)))
         else:
@@ -284,7 +328,9 @@ class PaidPaymentsExport(models.TransientModel):
 
     def _payment_matches_filters(self, invoice):
         if invoice is None:
-            # Orphan payment: only include when method filter is All or Cash
+            # Orphan payment: cashiers need a shop-linked invoice; skip.
+            if self._cashier_own_records_only():
+                return False
             return self.payment_method in ('all', 'Cash')
         return self._invoice_matches_filters(invoice)
 
@@ -297,7 +343,18 @@ class PaidPaymentsExport(models.TransientModel):
                 return False
             if (invoice.credit_information or '') != self.credit_information:
                 return False
-        if self.shop_id and invoice.shop_id != self.shop_id:
+        shop_domain = self._shop_domain()
+        if shop_domain:
+            # Reuse domain tuples: [('shop_id', '=', id)] or [('shop_id', 'in', ids)]
+            op, value = shop_domain[0][1], shop_domain[0][2]
+            shop_id = invoice.shop_id.id if invoice.shop_id else False
+            if op == '=' and shop_id != value:
+                return False
+            if op == 'in' and shop_id not in value:
+                return False
+        elif self.shop_id and invoice.shop_id != self.shop_id:
+            return False
+        if self._cashier_own_records_only() and invoice.create_uid != self.env.user:
             return False
         return True
 
