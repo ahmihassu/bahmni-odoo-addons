@@ -1,14 +1,53 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
-	
+
 	<record id="group_allow_change_qty" model="res.groups">
 		<field name="name">Allow default quantity to set as -1</field>
 		<field name="category_id" ref="base.module_category_hidden"/>
 	</record>
-	
+
 	<record id="group_allow_change_so_charge" model="res.groups">
 		<field name="name">Allow to set Chargeable amount for Sales Order</field>
 		<field name="category_id" ref="base.module_category_hidden"/>
 	</record>
-	
+
+	<!-- Privileges cashiers lack by default; sale/account managers get them implied. -->
+	<record id="group_allow_so_cancel" model="res.groups">
+		<field name="name">Allow Cancel Sale Orders</field>
+		<field name="category_id" ref="base.module_category_sales_management"/>
+		<field name="comment">Cashiers without this group cannot cancel quotations or sales orders.</field>
+	</record>
+
+	<record id="group_allow_edit_price" model="res.groups">
+		<field name="name">Allow Edit Sale Prices</field>
+		<field name="category_id" ref="base.module_category_sales_management"/>
+		<field name="comment">Cashiers without this group cannot change product unit prices on sale lines.</field>
+	</record>
+
+	<record id="group_allow_apply_discount" model="res.groups">
+		<field name="name">Allow Apply Discounts</field>
+		<field name="category_id" ref="base.module_category_sales_management"/>
+		<field name="comment">Cashiers without this group cannot apply order or line discounts.</field>
+	</record>
+
+	<record id="group_allow_invoice_refund" model="res.groups">
+		<field name="name">Allow Invoice Refunds and Payment Cancel</field>
+		<field name="category_id" ref="base.module_category_accounting_and_finance"/>
+		<field name="comment">Cashiers without this group cannot refund invoices or cancel customer payments.</field>
+	</record>
+
+	<!-- Managers keep full access even if also assigned the cashier shop group. -->
+	<record id="sales_team.group_sale_manager" model="res.groups">
+		<field name="implied_ids" eval="[
+			(4, ref('group_allow_so_cancel')),
+			(4, ref('group_allow_edit_price')),
+			(4, ref('group_allow_apply_discount')),
+			(4, ref('group_allow_invoice_refund')),
+		]"/>
+	</record>
+
+	<record id="account.group_account_manager" model="res.groups">
+		<field name="implied_ids" eval="[(4, ref('group_allow_invoice_refund'))]"/>
+	</record>
+
 </odoo>

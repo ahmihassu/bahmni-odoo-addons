@@ -134,13 +134,49 @@ class SaleOrder(models.Model):
                 vals['shop_id'] = allowed[0].id
         return super(SaleOrder, self).create(vals)
 
+    _BAHMNI_DISCOUNT_WRITE_FIELDS = (
+        'discount', 'discount_percentage', 'discount_type',
+        'disc_acc_id', 'chargeable_amount',
+    )
+
     @api.multi
     def write(self, vals):
+        Users = self.env['res.users']
+        if Users.bahmni_is_restricted_cashier():
+            locked = [f for f in ('shop_id', 'team_id', 'user_id') if f in vals]
+            if locked:
+                raise UserError(_(
+                    "Cashiers are not allowed to change Shop, Salesperson, or "
+                    "Sales Team on sales orders."
+                ))
         if self.env.user.has_group('bahmni_sale.group_cashier_own_shop') and 'shop_id' in vals:
             allowed_ids = self.env.user.shop_ids.ids
             if not allowed_ids or vals['shop_id'] not in allowed_ids:
                 raise UserError(_("You can only work on sale orders for your assigned shop(s)."))
+        if any(field in vals for field in self._BAHMNI_DISCOUNT_WRITE_FIELDS):
+            Users.bahmni_cashier_raise_if_restricted(
+                'bahmni_sale.group_allow_apply_discount',
+                _("Cashiers are not allowed to apply or change discounts. "
+                  "Ask a sales manager if a discount is required."),
+            )
         return super(SaleOrder, self).write(vals)
+
+    @api.multi
+    def action_cancel(self):
+        self.env['res.users'].bahmni_cashier_raise_if_restricted(
+            'bahmni_sale.group_allow_so_cancel',
+            _("Cashiers are not allowed to cancel quotations or sales orders. "
+              "Ask a sales manager if cancellation is required."),
+        )
+        return super(SaleOrder, self).action_cancel()
+
+    @api.multi
+    def copy(self, default=None):
+        self.env['res.users'].bahmni_cashier_raise_if_restricted(
+            None,
+            _("Cashiers are not allowed to duplicate quotations or sales orders."),
+        )
+        return super(SaleOrder, self).copy(default=default)
 
     @api.onchange('order_line')
     def onchange_order_line(self):
@@ -170,7 +206,8 @@ class SaleOrder(models.Model):
 
     @api.model
     def fields_view_get(self, view_id=None, view_type='form', toolbar=False, submenu=False):
-        '''1. make percentage and discount field readonly, when chargeable amount is allowed to enter'''
+        '''1. make percentage and discount field readonly, when chargeable amount is allowed to enter
+           2. lock cancel / discount / price UI for restricted cashiers'''
         result = super(SaleOrder, self).fields_view_get(view_id, view_type, toolbar=toolbar, submenu=submenu)
         if view_type == 'form':
             group_id = self.env.ref("bahmni_sale.group_allow_change_so_charge").id
@@ -185,6 +222,34 @@ class SaleOrder(models.Model):
                 for node in doc.xpath("//field[@name='discount_type']"):
                     node.set('readonly', '1')
                     setup_modifiers(node, result['fields']['discount_type'])
+            Users = self.env['res.users']
+            if Users.bahmni_is_restricted_cashier('bahmni_sale.group_allow_so_cancel'):
+                for node in doc.xpath("//button[@name='action_cancel']"):
+                    node.set('invisible', '1')
+                    setup_modifiers(node)
+            if Users.bahmni_is_restricted_cashier('bahmni_sale.group_allow_apply_discount'):
+                for fname in ('discount_type', 'discount_percentage', 'discount',
+                              'disc_acc_id', 'chargeable_amount'):
+                    for node in doc.xpath("//field[@name='%s']" % fname):
+                        node.set('readonly', '1')
+                        if fname in result.get('fields', {}):
+                            setup_modifiers(node, result['fields'][fname])
+            if Users.bahmni_is_restricted_cashier('bahmni_sale.group_allow_edit_price'):
+                for node in doc.xpath("//field[@name='price_unit']"):
+                    node.set('readonly', '1')
+                    if 'price_unit' in result.get('fields', {}):
+                        setup_modifiers(node, result['fields']['price_unit'])
+            if Users.bahmni_is_restricted_cashier():
+                for fname in ('shop_id', 'team_id', 'user_id'):
+                    for node in doc.xpath("//field[@name='%s']" % fname):
+                        node.set('readonly', '1')
+                        if fname == 'shop_id':
+                            node.set(
+                                'options',
+                                "{'no_open': True, 'no_create': True, 'no_create_edit': True}",
+                            )
+                        if fname in result.get('fields', {}):
+                            setup_modifiers(node, result['fields'][fname])
             result['arch'] = etree.tostring(doc)
         return result
 
