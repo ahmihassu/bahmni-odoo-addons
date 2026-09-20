@@ -54,6 +54,7 @@ class CbhiClaimExport(models.TransientModel):
 
     claim_type = fields.Selection([
         ('CBHI', 'CBHI'),
+        ('SHI', 'SHI'),
         ('Insurance', 'Insurance'),
         ('Credit Companies', 'Credit Companies'),
     ], string="Claim Type", required=True, default='CBHI')
@@ -106,9 +107,9 @@ class CbhiClaimExport(models.TransientModel):
                 date_end.strftime(DF),
             ))
 
-        if self.claim_type == 'CBHI':
+        if self.claim_type in ('CBHI', 'SHI'):
             xlsx_bytes = self._build_cbhi_workbook(invoices)
-            sheet_label = 'CBHI'
+            sheet_label = self.claim_type
         else:
             xlsx_bytes = self._build_payer_workbook(invoices)
             sheet_label = 'Insurance' if self.claim_type == 'Insurance' else 'CreditCompany'
@@ -205,8 +206,10 @@ class CbhiClaimExport(models.TransientModel):
             'eth_date': format_ethiopian_date(invoice.date_invoice),
             'member_id': (
                 invoice.cbhi_id
+                or invoice.shi_id
                 or invoice.insurance_id
                 or (patient.cbhi_id if patient else '')
+                or (patient.shi_id if patient else '')
                 or (patient.insurance_id if patient else '')
                 or ''
             ),
@@ -215,12 +218,37 @@ class CbhiClaimExport(models.TransientModel):
             'full_name': patient.name if patient else '',
             'sex': self._format_sex(patient.gender if patient else ''),
             'age': self._age_on_date(birthdate, invoice.date_invoice),
-            'region': (invoice.cbhi_region or (patient.cbhi_region if patient else '') or '').strip(),
-            'zone': (invoice.cbhi_zone or (patient.cbhi_zone if patient else '') or '').strip(),
-            'woreda': (invoice.cbhi_woreda or (patient.cbhi_woreda if patient else '') or '').strip(),
+            'region': (
+                invoice.cbhi_region
+                or invoice.shi_region
+                or invoice.insurance_region
+                or (patient.cbhi_region if patient else '')
+                or (patient.shi_region if patient else '')
+                or (patient.insurance_region if patient else '')
+                or ''
+            ).strip(),
+            'zone': (
+                invoice.cbhi_zone
+                or invoice.shi_zone
+                or invoice.insurance_geo_zone
+                or (patient.cbhi_zone if patient else '')
+                or (patient.shi_zone if patient else '')
+                or (patient.insurance_geo_zone if patient else '')
+                or ''
+            ).strip(),
+            'woreda': (
+                invoice.cbhi_woreda
+                or invoice.shi_woreda
+                or invoice.insurance_woreda
+                or (patient.cbhi_woreda if patient else '')
+                or (patient.shi_woreda if patient else '')
+                or (patient.insurance_woreda if patient else '')
+                or ''
+            ).strip(),
             'medical_card': (patient.ref if patient else '') or '',
             'payer_name': (
-                invoice.insurance_name
+                invoice.insurance_woreda
+                or invoice.insurance_name
                 or invoice.credit_companies
                 or (invoice.payer_partner_id.name if invoice.payer_partner_id else '')
                 or ''

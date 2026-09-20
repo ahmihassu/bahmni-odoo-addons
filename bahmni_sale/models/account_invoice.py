@@ -32,11 +32,22 @@ class AccountInvoice(models.Model):
     insurance_code = fields.Char(string="Insurance Code", readonly=True, copy=False)
     insurance_zone = fields.Char(string="Insurance Zone", readonly=True, copy=False)
     insurance_expiry_date = fields.Char(string="Insurance Expiry Date", readonly=True, copy=False)
+    police_officer_name = fields.Char(string="Police Officer Name", readonly=True, copy=False)
+    police_officer_phone = fields.Char(string="Police Officer Phone", readonly=True, copy=False)
+    insurance_region = fields.Char(string="Insurance Region", readonly=True, copy=False)
+    insurance_geo_zone = fields.Char(string="Insurance Geo Zone", readonly=True, copy=False)
+    insurance_woreda = fields.Char(string="Insurance Woreda", readonly=True, copy=False)
     cbhi_id = fields.Char(string="CBHI ID", readonly=True, copy=False)
     cbhi_expiry_date = fields.Char(string="CBHI Expiry Date", readonly=True, copy=False)
     cbhi_region = fields.Char(string="CBHI Region", readonly=True, copy=False)
     cbhi_zone = fields.Char(string="CBHI Zone", readonly=True, copy=False)
     cbhi_woreda = fields.Char(string="CBHI Woreda", readonly=True, copy=False)
+    cbhi_kebele = fields.Char(string="CBHI Kebele", readonly=True, copy=False)
+    shi_id = fields.Char(string="SHI ID", readonly=True, copy=False)
+    shi_region = fields.Char(string="SHI Region", readonly=True, copy=False)
+    shi_zone = fields.Char(string="SHI Zone", readonly=True, copy=False)
+    shi_woreda = fields.Char(string="SHI Woreda", readonly=True, copy=False)
+    shi_kebele = fields.Char(string="SHI Kebele", readonly=True, copy=False)
 
     _BAHMNI_DISCOUNT_WRITE_FIELDS = (
         'discount', 'discount_percentage', 'discount_type', 'disc_acc_id',
