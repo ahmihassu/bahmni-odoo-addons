@@ -5,7 +5,7 @@
              Upgrades also merge via bahmni.default.shop.setup.ensure_payment_attribute_whitelist. -->
         <record id="openmrs_patient_attributes" model="ir.config_parameter">
             <field name="key">openmrs_patient_attributes</field>
-            <field name="value">PaymentMethod,Credit Information,Credit Companies,Free,InsuranceID,InsuranceName,InsuranceCode,InsuranceZone,InsuranceExpiryDate,CBHI ID,CBHIExpiryDate,CBHI Region,CBHI Zone,CBHI Woreda</field>
+            <field name="value">PaymentMethod,Credit Information,Credit Companies,Free,InsuranceID,InsuranceName,InsuranceCode,InsuranceZone,InsuranceExpiryDate,Police Officer Name,Police Officer Phone,Insurance Region,Insurance Zone,Insurance Woreda,CBHI ID,CBHIExpiryDate,CBHI Region,CBHI Zone,CBHI Woreda,CBHI Kebele,SHI ID,SHI Region,SHI Zone,SHI Woreda,SHI Kebele</field>
         </record>
     </data>
 </odoo>

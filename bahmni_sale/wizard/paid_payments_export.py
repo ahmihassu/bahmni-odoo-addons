@@ -72,6 +72,7 @@ class PaidPaymentsExport(models.TransientModel):
     credit_information = fields.Selection([
         ('all', 'All'),
         ('CBHI', 'CBHI'),
+        ('SHI', 'SHI'),
         ('Insurance', 'Insurance'),
         ('Credit Companies', 'Credit Companies'),
     ], string="Credit Type", default='all')

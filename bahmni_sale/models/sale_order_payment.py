@@ -16,11 +16,22 @@ PAYMENT_SNAPSHOT_FIELDS = (
     'insurance_code',
     'insurance_zone',
     'insurance_expiry_date',
+    'police_officer_name',
+    'police_officer_phone',
+    'insurance_region',
+    'insurance_geo_zone',
+    'insurance_woreda',
     'cbhi_id',
     'cbhi_expiry_date',
     'cbhi_region',
     'cbhi_zone',
     'cbhi_woreda',
+    'cbhi_kebele',
+    'shi_id',
+    'shi_region',
+    'shi_zone',
+    'shi_woreda',
+    'shi_kebele',
 )
 
 
@@ -37,11 +48,22 @@ class SaleOrder(models.Model):
     insurance_code = fields.Char(string="Insurance Code", readonly=True, copy=False)
     insurance_zone = fields.Char(string="Insurance Zone", readonly=True, copy=False)
     insurance_expiry_date = fields.Char(string="Insurance Expiry Date", readonly=True, copy=False)
+    police_officer_name = fields.Char(string="Police Officer Name", readonly=True, copy=False)
+    police_officer_phone = fields.Char(string="Police Officer Phone", readonly=True, copy=False)
+    insurance_region = fields.Char(string="Insurance Region", readonly=True, copy=False)
+    insurance_geo_zone = fields.Char(string="Insurance Geo Zone", readonly=True, copy=False)
+    insurance_woreda = fields.Char(string="Insurance Woreda", readonly=True, copy=False)
     cbhi_id = fields.Char(string="CBHI ID", readonly=True, copy=False)
     cbhi_expiry_date = fields.Char(string="CBHI Expiry Date", readonly=True, copy=False)
     cbhi_region = fields.Char(string="CBHI Region", readonly=True, copy=False)
     cbhi_zone = fields.Char(string="CBHI Zone", readonly=True, copy=False)
     cbhi_woreda = fields.Char(string="CBHI Woreda", readonly=True, copy=False)
+    cbhi_kebele = fields.Char(string="CBHI Kebele", readonly=True, copy=False)
+    shi_id = fields.Char(string="SHI ID", readonly=True, copy=False)
+    shi_region = fields.Char(string="SHI Region", readonly=True, copy=False)
+    shi_zone = fields.Char(string="SHI Zone", readonly=True, copy=False)
+    shi_woreda = fields.Char(string="SHI Woreda", readonly=True, copy=False)
+    shi_kebele = fields.Char(string="SHI Kebele", readonly=True, copy=False)
     payer_partner_id = fields.Many2one(
         'res.partner',
         string="Payer",
@@ -162,7 +184,7 @@ class SaleOrder(models.Model):
                     raise UserError(_(
                         "Credit payer could not be resolved for patient '%s' "
                         "(Credit Information: %s). "
-                        "Fix CBHI Woreda / Insurance Name / Credit Company in OpenMRS, "
+                        "Fix CBHI/SHI Woreda / Insurance Woreda / Credit Company in OpenMRS, "
                         "or create the payer partner in Odoo. Confirm is blocked."
                     ) % (order.partner_id.display_name, order.credit_information or '-'))
             if payment_method == 'Free':
@@ -239,11 +261,22 @@ class SaleOrder(models.Model):
             'insurance_code': self.insurance_code,
             'insurance_zone': self.insurance_zone,
             'insurance_expiry_date': self.insurance_expiry_date,
+            'police_officer_name': self.police_officer_name,
+            'police_officer_phone': self.police_officer_phone,
+            'insurance_region': self.insurance_region,
+            'insurance_geo_zone': self.insurance_geo_zone,
+            'insurance_woreda': self.insurance_woreda,
             'cbhi_id': self.cbhi_id,
             'cbhi_expiry_date': self.cbhi_expiry_date,
             'cbhi_region': self.cbhi_region,
             'cbhi_zone': self.cbhi_zone,
             'cbhi_woreda': self.cbhi_woreda,
+            'cbhi_kebele': self.cbhi_kebele,
+            'shi_id': self.shi_id,
+            'shi_region': self.shi_region,
+            'shi_zone': self.shi_zone,
+            'shi_woreda': self.shi_woreda,
+            'shi_kebele': self.shi_kebele,
             'payer_partner_id': self.payer_partner_id.id,
             'patient_partner_id': self.partner_id.id,
         })

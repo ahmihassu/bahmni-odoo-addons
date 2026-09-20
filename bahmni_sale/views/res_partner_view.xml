@@ -41,11 +41,11 @@ and in case user exactly don't know the position, he/she will need to search for
                         </group>
                         <group string="Insurance"
                                attrs="{'invisible': [('credit_information', '!=', 'Insurance')]}">
-                            <field name="insurance_name"/>
-                            <field name="insurance_id"/>
-                            <field name="insurance_code"/>
-                            <field name="insurance_zone"/>
-                            <field name="insurance_expiry_date"/>
+                            <field name="police_officer_name"/>
+                            <field name="police_officer_phone"/>
+                            <field name="insurance_region"/>
+                            <field name="insurance_geo_zone"/>
+                            <field name="insurance_woreda"/>
                         </group>
                         <group string="CBHI"
                                attrs="{'invisible': [('credit_information', '!=', 'CBHI')]}">
@@ -54,6 +54,15 @@ and in case user exactly don't know the position, he/she will need to search for
                             <field name="cbhi_region"/>
                             <field name="cbhi_zone"/>
                             <field name="cbhi_woreda"/>
+                            <field name="cbhi_kebele"/>
+                        </group>
+                        <group string="SHI"
+                               attrs="{'invisible': [('credit_information', '!=', 'SHI')]}">
+                            <field name="shi_id"/>
+                            <field name="shi_region"/>
+                            <field name="shi_zone"/>
+                            <field name="shi_woreda"/>
+                            <field name="shi_kebele"/>
                         </group>
                         <group string="Payer Master"
                                attrs="{'invisible': [('is_bahmni_payer', '=', False)]}">

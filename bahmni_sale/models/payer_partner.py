@@ -8,6 +8,7 @@ _logger = logging.getLogger(__name__)
 PAYER_TYPE_CBHI = 'cbhi'
 PAYER_TYPE_INSURANCE = 'insurance'
 PAYER_TYPE_CREDIT_COMPANY = 'credit_company'
+PAYER_TYPE_SHI = 'shi'
 
 
 class ResPartner(models.Model):
@@ -16,12 +17,13 @@ class ResPartner(models.Model):
     is_bahmni_payer = fields.Boolean(
         string="Bahmni Payer",
         default=False,
-        help="Third-party payer (CBHI woreda, insurer, credit company).",
+        help="Third-party payer (CBHI woreda, insurer, credit company, SHI).",
     )
     bahmni_payer_type = fields.Selection([
         (PAYER_TYPE_CBHI, 'CBHI'),
         (PAYER_TYPE_INSURANCE, 'Insurance'),
         (PAYER_TYPE_CREDIT_COMPANY, 'Credit Company'),
+        (PAYER_TYPE_SHI, 'SHI'),
     ], string="Payer Type", copy=False)
     bahmni_payer_needs_review = fields.Boolean(
         string="Payer Needs Review",
@@ -110,9 +112,14 @@ class ResPartner(models.Model):
                 self.cbhi_woreda,
                 PAYER_TYPE_CBHI,
             )
+        if credit_info == 'SHI':
+            return self._bahmni_get_or_create_payer(
+                self.shi_woreda,
+                PAYER_TYPE_SHI,
+            )
         if credit_info == 'Insurance':
             return self._bahmni_get_or_create_payer(
-                self.insurance_name,
+                self.insurance_woreda or self.insurance_name,
                 PAYER_TYPE_INSURANCE,
                 code=self.insurance_code,
             )
