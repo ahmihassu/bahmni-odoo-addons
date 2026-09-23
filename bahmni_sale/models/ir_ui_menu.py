@@ -25,6 +25,9 @@ BAHMNI_CASHIER_HIDDEN_MENU_XMLIDS = (
     'bahmni_account.menu_action_search_account_count_reports',
     'bahmni_sale.menu_bahmni_cbhi_claim_export',
     'bahmni_sale.menu_bahmni_cbhi_claim_export_sales',
+    # Credit settlement (also gated by group; hide if cashier somehow has group)
+    'bahmni_sale.menu_bahmni_credit_settlement_wizard',
+    'bahmni_sale.menu_bahmni_credit_settlement_log',
     # Shop configuration
     'bahmni_sale.menu_action_shop_form',
 )

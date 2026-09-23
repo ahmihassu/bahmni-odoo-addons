@@ -42,6 +42,12 @@
 		<field name="comment">Required to approve and pay out IPD deposit refunds (two-person rule).</field>
 	</record>
 
+	<record id="group_credit_settlement_reconcile" model="res.groups">
+		<field name="name">Credit Settlement Reconciliation</field>
+		<field name="category_id" ref="base.module_category_accounting_and_finance"/>
+		<field name="comment">Upload Excel to settle CBHI/SHI/Insurance/Credit Company invoices. Cashiers must not have this group.</field>
+	</record>
+
 	<!-- Managers keep full access even if also assigned the cashier shop group. -->
 	<record id="sales_team.group_sale_manager" model="res.groups">
 		<field name="implied_ids" eval="[
@@ -50,6 +56,7 @@
 			(4, ref('group_allow_apply_discount')),
 			(4, ref('group_allow_invoice_refund')),
 			(4, ref('group_ipd_deposit_refund_approve')),
+			(4, ref('group_credit_settlement_reconcile')),
 		]"/>
 	</record>
 
@@ -57,6 +64,7 @@
 		<field name="implied_ids" eval="[
 			(4, ref('group_allow_invoice_refund')),
 			(4, ref('group_ipd_deposit_refund_approve')),
+			(4, ref('group_credit_settlement_reconcile')),
 		]"/>
 	</record>
 

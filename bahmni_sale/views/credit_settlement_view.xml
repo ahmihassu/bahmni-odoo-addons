@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_bahmni_credit_settlement_wizard_form" model="ir.ui.view">
+        <field name="name">bahmni.credit.settlement.wizard.form</field>
+        <field name="model">bahmni.credit.settlement.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Credit Settlement Reconciliation">
+                <field name="state" invisible="1"/>
+                <group states="choose">
+                    <group string="Settlement">
+                        <field name="credit_type"/>
+                        <field name="company_id"/>
+                        <field name="journal_id"/>
+                        <field name="payment_date"/>
+                    </group>
+                    <group string="Template">
+                        <field name="include_open_invoices"/>
+                        <p colspan="2">
+                            Download a simple settlement Excel (CBHI / SHI / Insurance /
+                            Credit Companies, or All). Pre-fill open invoices, enter
+                            Paid Amount equal to Amount Due, then upload below.
+                        </p>
+                    </group>
+                </group>
+                <group states="choose" string="Upload">
+                    <field name="upload_fname" invisible="1"/>
+                    <field name="upload_file" filename="upload_fname"/>
+                </group>
+                <group states="choose" string="Downloaded Template"
+                       attrs="{'invisible': [('template_file', '=', False)]}">
+                    <field name="template_fname" invisible="1"/>
+                    <field name="template_file" readonly="1" filename="template_fname"/>
+                </group>
+                <div states="done">
+                    <h2>Reconciliation finished</h2>
+                    <p>
+                        Matched
+                        <field name="matched_count" readonly="1" class="oe_inline"/>
+                        ,
+                        skipped
+                        <field name="skipped_count" readonly="1" class="oe_inline"/>
+                        ,
+                        total settled
+                        <field name="total_paid" readonly="1" class="oe_inline"/>
+                    </p>
+                    <field name="log_id" invisible="1"/>
+                    <field name="report_fname" invisible="1"/>
+                    <field name="report_file" readonly="1" filename="report_fname"/>
+                </div>
+                <footer states="choose">
+                    <button name="action_download_template"
+                            string="Download Template"
+                            type="object"
+                            class="oe_highlight"/>
+                    <button name="action_reconcile"
+                            string="Upload &amp; Reconcile"
+                            type="object"
+                            class="oe_highlight"/>
+                    or
+                    <button string="Cancel" class="oe_link" special="cancel"/>
+                </footer>
+                <footer states="done">
+                    <button name="action_open_log"
+                            string="Open Log"
+                            type="object"
+                            class="oe_highlight"/>
+                    <button string="Close" class="oe_link" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_bahmni_credit_settlement_wizard" model="ir.actions.act_window">
+        <field name="name">Credit Settlement Reconciliation</field>
+        <field name="res_model">bahmni.credit.settlement.wizard</field>
+        <field name="view_type">form</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <menuitem id="menu_bahmni_credit_settlement_wizard"
+              name="Credit Settlement Reconciliation"
+              parent="account.menu_finance_receivables"
+              action="action_bahmni_credit_settlement_wizard"
+              groups="bahmni_sale.group_credit_settlement_reconcile"
+              sequence="40"/>
+
+    <!-- Persistent logs -->
+    <record id="view_bahmni_credit_settlement_log_tree" model="ir.ui.view">
+        <field name="name">bahmni.credit.settlement.log.tree</field>
+        <field name="model">bahmni.credit.settlement.log</field>
+        <field name="arch" type="xml">
+            <tree string="Credit Settlement Logs" create="false" edit="false">
+                <field name="name"/>
+                <field name="create_date"/>
+                <field name="user_id"/>
+                <field name="credit_type"/>
+                <field name="journal_id"/>
+                <field name="matched_count"/>
+                <field name="skipped_count"/>
+                <field name="total_paid"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_bahmni_credit_settlement_log_form" model="ir.ui.view">
+        <field name="name">bahmni.credit.settlement.log.form</field>
+        <field name="model">bahmni.credit.settlement.log</field>
+        <field name="arch" type="xml">
+            <form string="Credit Settlement Log" create="false" edit="false">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="create_date"/>
+                            <field name="user_id"/>
+                            <field name="credit_type"/>
+                        </group>
+                        <group>
+                            <field name="journal_id"/>
+                            <field name="payment_date"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="matched_count"/>
+                            <field name="skipped_count"/>
+                            <field name="total_paid"/>
+                        </group>
+                    </group>
+                    <group string="Files">
+                        <field name="upload_fname" invisible="1"/>
+                        <field name="upload_file" filename="upload_fname"/>
+                        <field name="report_fname" invisible="1"/>
+                        <field name="report_file" filename="report_fname"/>
+                    </group>
+                    <field name="notes"/>
+                    <field name="line_ids">
+                        <tree>
+                            <field name="row_number"/>
+                            <field name="invoice_number"/>
+                            <field name="credit_type"/>
+                            <field name="paid_amount"/>
+                            <field name="status"/>
+                            <field name="skip_reason"/>
+                            <field name="invoice_id"/>
+                            <field name="payment_id"/>
+                        </tree>
+                    </field>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_bahmni_credit_settlement_log" model="ir.actions.act_window">
+        <field name="name">Credit Settlement Logs</field>
+        <field name="res_model">bahmni.credit.settlement.log</field>
+        <field name="view_type">form</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <menuitem id="menu_bahmni_credit_settlement_log"
+              name="Credit Settlement Logs"
+              parent="account.menu_finance_receivables"
+              action="action_bahmni_credit_settlement_log"
+              groups="bahmni_sale.group_credit_settlement_reconcile"
+              sequence="41"/>
+</odoo>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="seq_bahmni_credit_settlement_log" model="ir.sequence">
+            <field name="name">Credit Settlement Log</field>
+            <field name="code">bahmni.credit.settlement.log</field>
+            <field name="prefix">CSL/%(year)s/</field>
+            <field name="padding">4</field>
+            <field name="company_id" eval="False"/>
+        </record>
+    </data>
+</odoo>
