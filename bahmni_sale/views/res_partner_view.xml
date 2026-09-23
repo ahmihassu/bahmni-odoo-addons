@@ -64,6 +64,9 @@ and in case user exactly don't know the position, he/she will need to search for
                             <field name="shi_woreda"/>
                             <field name="shi_kebele"/>
                         </group>
+                        <group string="IPD Deposit">
+                            <field name="ipd_deposit_balance" readonly="1"/>
+                        </group>
                         <group string="Payer Master"
                                attrs="{'invisible': [('is_bahmni_payer', '=', False)]}">
                             <field name="is_bahmni_payer"/>
@@ -71,6 +74,17 @@ and in case user exactly don't know the position, he/she will need to search for
                             <field name="bahmni_payer_needs_review"/>
                         </group>
                     </group>
+                    <field name="ipd_deposit_movement_ids" readonly="1">
+                        <tree create="false" delete="false" edit="false">
+                            <field name="create_date"/>
+                            <field name="receipt_number"/>
+                            <field name="movement_type"/>
+                            <field name="amount"/>
+                            <field name="balance_after"/>
+                            <field name="cashier_id"/>
+                            <field name="state"/>
+                        </tree>
+                    </field>
                 </page>
                 <page string="Additional Info">
                     <field name="attribute_ids" readonly="1">

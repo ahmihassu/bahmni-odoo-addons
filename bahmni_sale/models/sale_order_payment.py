@@ -155,8 +155,21 @@ class SaleOrder(models.Model):
         return acc
 
     @api.multi
+    def _bahmni_is_ipd_bed_order(self):
+        """True when this SO is billed through the IPD / Bed shop (bed fees never Free-waived)."""
+        self.ensure_one()
+        shop_name = (self.shop_id.name or '').strip() if self.shop_id else ''
+        if shop_name == 'IPD':
+            return True
+        care = (self.care_setting or '').strip().lower()
+        return care == 'ipd' and shop_name in ('IPD', 'Bed', '')
+
+    @api.multi
     def _bahmni_apply_free_care_discount(self):
         for order in self:
+            # Bed fees are payable for all payment types — never auto-waive Free on IPD bed SOs.
+            if order._bahmni_is_ipd_bed_order():
+                continue
             free_acc = order._bahmni_get_free_care_account()
             amount_total = order.amount_untaxed + order.amount_tax
             vals = {
@@ -168,6 +181,74 @@ class SaleOrder(models.Model):
             if free_acc:
                 vals['disc_acc_id'] = free_acc.id
             order.sudo().write(vals)
+
+    def _bahmni_is_cash_ipd_order(self):
+        self.ensure_one()
+        payment_method = (self.payment_method or self.partner_id.payment_method or '').strip()
+        care = (self.care_setting or '').strip().lower()
+        shop_name = (self.shop_id.name or '').strip() if self.shop_id else ''
+        return payment_method == 'Cash' and (care == 'ipd' or shop_name == 'IPD')
+
+    @api.multi
+    def _bahmni_allocate_ipd_deposit_on_invoice(self, invoice):
+        """Pay invoice residual from IPD deposit for Cash patients. Returns amount applied."""
+        self.ensure_one()
+        partner = self.partner_id
+        payment_method = (self.payment_method or partner.payment_method or '').strip()
+        if payment_method != 'Cash':
+            return 0.0
+        balance = partner.ipd_deposit_balance or 0.0
+        if balance <= 0 or invoice.residual <= 0:
+            return 0.0
+        # Prefer deposit allocation for IPD care setting / IPD shop; also allow if balance exists.
+        care = (self.care_setting or '').strip().lower()
+        shop_name = (self.shop_id.name or '').strip() if self.shop_id else ''
+        if care != 'ipd' and shop_name != 'IPD' and balance <= 0:
+            return 0.0
+
+        apply_amount = min(balance, invoice.residual)
+        if apply_amount <= 0:
+            return 0.0
+
+        # Block confirm-time shortage for pure IPD cash orders that should be deposit-covered.
+        if care == 'ipd' or shop_name == 'IPD':
+            if balance + 0.00001 < invoice.residual:
+                raise UserError(_(
+                    "Insufficient IPD deposit for patient '%s'. "
+                    "Balance: %.2f, Invoice: %.2f. Collect exact shortfall top-up first."
+                ) % (partner.display_name, balance, invoice.residual))
+
+        journal = self._bahmni_get_default_cash_journal()
+        Payment = self.env['account.payment']
+        method = self.env['account.payment.method'].search([
+            ('payment_type', '=', 'inbound'),
+            ('code', '=', 'manual'),
+        ], limit=1)
+        if not method:
+            raise UserError(_("No inbound manual payment method found for deposit allocation."))
+
+        payment = Payment.with_context(
+            default_invoice_ids=[(4, invoice.id, None)],
+            bahmni_ipd_deposit_allocation=True,
+        ).create({
+            'payment_type': 'inbound',
+            'partner_type': 'customer',
+            'partner_id': partner.id,
+            'amount': apply_amount,
+            'journal_id': journal.id,
+            'payment_method_id': method.id,
+            'invoice_ids': [(4, invoice.id, None)],
+            'communication': _('IPD deposit applied - %s') % (partner.ref or partner.name),
+        })
+        payment.with_context(bahmni_ipd_deposit_allocation=True).post()
+        partner.bahmni_adjust_ipd_deposit(
+            -apply_amount, 'charge', payment=payment, sale_order=self, invoice=invoice,
+            notes=_("Applied to invoice %s") % (invoice.number or invoice.id),
+        )
+        invoice.message_post(body=_(
+            "Applied %.2f from IPD deposit. Remaining deposit: %.2f."
+        ) % (apply_amount, partner.ipd_deposit_balance or 0.0))
+        return apply_amount
 
     @api.multi
     def _bahmni_validate_payment_for_confirm(self):
@@ -189,6 +270,24 @@ class SaleOrder(models.Model):
                     ) % (order.partner_id.display_name, order.credit_information or '-'))
             if payment_method == 'Free':
                 order._bahmni_apply_free_care_discount()
+                # Free + bed order still requires payment (no 100% waive).
+                if order._bahmni_is_ipd_bed_order():
+                    order.message_post(body=_(
+                        "Free care does not waive bed fees; invoice remains payable."
+                    ))
+            if order._bahmni_is_cash_ipd_order():
+                partner = order.partner_id
+                available = partner.bahmni_ipd_deposit_available(exclude_order=order)
+                # While confirming this order, its own total must be covered by available
+                # (available already excludes other open commitments).
+                required = order.amount_total or 0.0
+                if available + 0.00001 < required:
+                    shortfall = required - available
+                    raise UserError(_(
+                        "Insufficient IPD deposit for patient '%s'. "
+                        "Available: %.2f, Order: %.2f, Shortfall: %.2f. "
+                        "Collect exact shortfall top-up before confirming."
+                    ) % (partner.display_name, available, required, shortfall))
 
     @api.multi
     def _bahmni_create_and_open_invoice(self):

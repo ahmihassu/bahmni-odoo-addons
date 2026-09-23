@@ -36,6 +36,12 @@
 		<field name="comment">Cashiers without this group cannot refund invoices or cancel customer payments.</field>
 	</record>
 
+	<record id="group_ipd_deposit_refund_approve" model="res.groups">
+		<field name="name">Approve IPD Deposit Refunds</field>
+		<field name="category_id" ref="base.module_category_accounting_and_finance"/>
+		<field name="comment">Required to approve and pay out IPD deposit refunds (two-person rule).</field>
+	</record>
+
 	<!-- Managers keep full access even if also assigned the cashier shop group. -->
 	<record id="sales_team.group_sale_manager" model="res.groups">
 		<field name="implied_ids" eval="[
@@ -43,11 +49,15 @@
 			(4, ref('group_allow_edit_price')),
 			(4, ref('group_allow_apply_discount')),
 			(4, ref('group_allow_invoice_refund')),
+			(4, ref('group_ipd_deposit_refund_approve')),
 		]"/>
 	</record>
 
 	<record id="account.group_account_manager" model="res.groups">
-		<field name="implied_ids" eval="[(4, ref('group_allow_invoice_refund'))]"/>
+		<field name="implied_ids" eval="[
+			(4, ref('group_allow_invoice_refund')),
+			(4, ref('group_ipd_deposit_refund_approve')),
+		]"/>
 	</record>
 
 </odoo>

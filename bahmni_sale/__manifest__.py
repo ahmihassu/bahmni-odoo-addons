@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Bahmni Sale',
-    'version': '1.13',
+    'version': '1.14',
     'summary': 'Custom Sales module to meet bahmni requirement',
     'sequence': 1,
     'description': """
@@ -20,6 +20,7 @@ Bahmni Sale
              'security/sale_shop_cashier_security.xml',
              'data/data.xml',
              'data/free_care_account.xml',
+             'data/ipd_deposit_data.xml',
              'data/sale_config_setting.xml',
              'views/bahmni_sale.xml',
              'views/res_partner_view.xml',
@@ -30,7 +31,8 @@ Bahmni Sale
 	     'views/pos_view.xml',
              'views/account_invoice_view.xml',
              'wizard/cbhi_claim_export_view.xml',
-             'wizard/paid_payments_export_view.xml'],
+             'wizard/paid_payments_export_view.xml',
+             'wizard/ipd_deposit_wizards_view.xml'],
     'demo': [],
     'qweb': [],
     'installable': True,

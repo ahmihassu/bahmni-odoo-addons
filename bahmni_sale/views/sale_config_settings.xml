@@ -42,6 +42,11 @@
                     <field name="auto_create_customer_address_levels" class="oe_inline" />
                     <label for="auto_create_customer_address_levels"/>
                 </div>
+                <label string="IPD Deposit"/>
+                <div name="ipd_deposit_feature">
+                    <field name="ipd_min_deposit_amount"/>
+                    <field name="ipd_deposit_account_id"/>
+                </div>
 			</xpath>
 		</field>
 	</record>
