@@ -90,7 +90,7 @@ class AccountInvoice(models.Model):
 
     def _bahmni_is_credit_invoice(self):
         self.ensure_one()
-        return (self.payment_method or '').strip() == 'Credit'
+        return (self.payment_method or '').strip().lower() == 'credit'
 
     def _bahmni_raise_if_credit_register_payment(self):
         for invoice in self:
@@ -169,20 +169,8 @@ class AccountInvoice(models.Model):
             return result
         Users = self.env['res.users']
         doc = etree.XML(result['arch'])
-        # Hide Register Payment on Credit invoices (settled via Excel reconcile only).
-        for node in doc.xpath("//button"):
-            name = node.get('name') or ''
-            string = (node.get('string') or '').lower()
-            if name in (
-                    'action_invoice_register_payment',
-                    'invoice_pay_customer',
-            ) or string == 'register payment':
-                node.set(
-                    'attrs',
-                    "{'invisible': ['|', ('state', '!=', 'open'), "
-                    "('payment_method', '=', 'Credit')]}",
-                )
-                setup_modifiers(node)
+        # Register Payment visibility for Credit is set in account_invoice_view.xml
+        # (attrs need payment_method on the same form; do not patch every invoice form here).
         if Users.bahmni_is_restricted_cashier('bahmni_sale.group_allow_invoice_refund'):
             refund_action = self.env.ref(
                 'account.action_account_invoice_refund', raise_if_not_found=False)

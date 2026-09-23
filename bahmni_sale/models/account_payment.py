@@ -32,12 +32,35 @@ class AccountPayment(models.Model):
         if payment.payment_type != 'inbound' or payment.partner_type != 'customer':
             return
         for invoice in payment.invoice_ids:
-            if (invoice.payment_method or '').strip() == 'Credit':
+            if (invoice.payment_method or '').strip().lower() == 'credit':
                 raise UserError(_(
                     "Invoice '%s' is a Credit bill. Register Payment is not allowed. "
                     "Settle credit invoices with Accounting → Credit Settlement "
                     "Reconciliation (Excel upload)."
                 ) % (invoice.number or invoice.id))
+
+    @api.model
+    def default_get(self, fields_list):
+        """Block opening Register Payment for Credit invoices (SO confirm / invoice button)."""
+        rec = super(AccountPayment, self).default_get(fields_list)
+        if self.env.context.get('bahmni_credit_settlement_reconcile'):
+            return rec
+        invoices = self.env['account.invoice']
+        if self.env.context.get('active_model') == 'account.invoice':
+            invoices |= self.env['account.invoice'].browse(
+                self.env.context.get('active_ids') or [])
+        # default_invoice_ids from SO confirm: [(4, id, None), ...]
+        for cmd in (self.env.context.get('default_invoice_ids') or []):
+            if isinstance(cmd, (list, tuple)) and len(cmd) >= 2 and cmd[0] == 4:
+                invoices |= self.env['account.invoice'].browse(cmd[1])
+        for invoice in invoices:
+            if (invoice.payment_method or '').strip().lower() == 'credit':
+                raise UserError(_(
+                    "Invoice '%s' is a Credit bill. Register Payment is not allowed. "
+                    "Settle credit invoices with Accounting → Credit Settlement "
+                    "Reconciliation (Excel upload)."
+                ) % (invoice.number or invoice.id))
+        return rec
 
     @api.model
     def create(self, vals):
