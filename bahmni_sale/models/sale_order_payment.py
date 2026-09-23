@@ -324,9 +324,41 @@ class SaleOrder(models.Model):
             ) % (company.display_name,))
         return journal
 
+    def _bahmni_is_credit_flow(self):
+        """True when this order must not collect cash (Credit payer receivable)."""
+        self.ensure_one()
+        method = (
+            self.payment_method
+            or (self.partner_id.payment_method if self.partner_id else '')
+            or ''
+        ).strip().lower()
+        if method == 'credit':
+            return True
+        if (self.credit_information or '').strip():
+            return True
+        payer = self.payer_partner_id
+        if payer and getattr(payer, 'is_bahmni_payer', False):
+            return True
+        return False
+
+    @api.multi
+    def _bahmni_invoice_form_action(self, invoice):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'account.invoice',
+            'view_mode': 'form',
+            'res_id': invoice.id,
+            'target': 'current',
+        }
+
     @api.multi
     def _bahmni_register_payment_action(self, invoice):
+        """Open Register Payment for Cash only; Credit invoices never open this wizard."""
         self.ensure_one()
+        if self._bahmni_is_credit_flow() or (
+                invoice and (invoice.payment_method or '').strip().lower() == 'credit'):
+            return self._bahmni_invoice_form_action(invoice)
         cash_journal = self._bahmni_get_default_cash_journal()
         ctx = dict(
             default_invoice_ids=[(4, invoice.id, None)],

@@ -18,6 +18,13 @@
 				<field name="free_reason"
 					attrs="{'invisible': [('payment_method', '!=', 'Free')]}"/>
 			</xpath>
+			<!-- Odoo 10 customer form: Register Payment is the payment window action. -->
+			<xpath expr="//button[@name='%(account.action_account_invoice_payment)d']" position="replace">
+				<button name="%(account.action_account_invoice_payment)d" type="action"
+					string="Register Payment" groups="account.group_account_invoice"
+					class="oe_highlight"
+					attrs="{'invisible': ['|', ('state', '!=', 'open'), ('payment_method', '=', 'Credit')]}"/>
+			</xpath>
 		</field>
 	</record>
 </odoo>

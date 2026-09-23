@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Bahmni Sale',
-    'version': '1.14',
+    'version': '1.19',
     'summary': 'Custom Sales module to meet bahmni requirement',
     'sequence': 1,
     'description': """
@@ -15,13 +15,14 @@ Bahmni Sale
     'external_dependencies': {
         'python': ['xlsxwriter'],
     },
-    'data': ['security/ir.model.access.csv',
-             'security/security_groups.xml',
+    'data': ['security/security_groups.xml',
              'security/sale_shop_cashier_security.xml',
+             'security/ir.model.access.csv',
              'data/data.xml',
              'data/free_care_account.xml',
              'data/ipd_deposit_data.xml',
              'data/sale_config_setting.xml',
+             'data/credit_settlement_data.xml',
              'views/bahmni_sale.xml',
              'views/res_partner_view.xml',
              'views/res_users_view.xml',
@@ -30,6 +31,7 @@ Bahmni Sale
              'views/sale_config_settings.xml',
 	     'views/pos_view.xml',
              'views/account_invoice_view.xml',
+             'views/credit_settlement_view.xml',
              'wizard/cbhi_claim_export_view.xml',
              'wizard/paid_payments_export_view.xml',
              'wizard/ipd_deposit_wizards_view.xml'],

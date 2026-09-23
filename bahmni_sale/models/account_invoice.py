@@ -88,6 +88,58 @@ class AccountInvoice(models.Model):
                     ))
         return super(AccountInvoice, self).write(vals)
 
+    def _bahmni_is_credit_invoice(self):
+        self.ensure_one()
+        return (self.payment_method or '').strip().lower() == 'credit'
+
+    def _bahmni_raise_if_credit_register_payment(self):
+        for invoice in self:
+            if invoice._bahmni_is_credit_invoice():
+                raise UserError(_(
+                    "Invoice '%s' is a Credit bill. Register Payment is not allowed. "
+                    "Settle credit invoices with Accounting → Credit Settlement "
+                    "Reconciliation (Excel upload)."
+                ) % (invoice.number or invoice.id))
+
+    @api.multi
+    def action_invoice_register_payment(self):
+        self._bahmni_raise_if_credit_register_payment()
+        try:
+            return super(AccountInvoice, self).action_invoice_register_payment()
+        except AttributeError:
+            return self._bahmni_open_register_payment_form()
+
+    @api.multi
+    def invoice_pay_customer(self):
+        """Odoo 10 customer payment entry point."""
+        self._bahmni_raise_if_credit_register_payment()
+        try:
+            return super(AccountInvoice, self).invoice_pay_customer()
+        except AttributeError:
+            return self._bahmni_open_register_payment_form()
+
+    @api.multi
+    def _bahmni_open_register_payment_form(self):
+        self.ensure_one()
+        ctx = dict(
+            default_invoice_ids=[(4, self.id, None)],
+            default_payment_type='inbound',
+            default_partner_type='customer',
+        )
+        view = self.env.ref('account.view_account_payment_invoice_form', raise_if_not_found=False)
+        views = [(view.id, 'form')] if view else [(False, 'form')]
+        return {
+            'name': _('Register Payment'),
+            'type': 'ir.actions.act_window',
+            'view_type': 'form',
+            'view_mode': 'form',
+            'res_model': 'account.payment',
+            'views': views,
+            'view_id': view.id if view else False,
+            'target': 'new',
+            'context': ctx,
+        }
+
     @api.multi
     def action_invoice_cancel(self):
         self.env['res.users'].bahmni_cashier_raise_if_restricted(
@@ -117,6 +169,8 @@ class AccountInvoice(models.Model):
             return result
         Users = self.env['res.users']
         doc = etree.XML(result['arch'])
+        # Register Payment visibility for Credit is set in account_invoice_view.xml
+        # (attrs need payment_method on the same form; do not patch every invoice form here).
         if Users.bahmni_is_restricted_cashier('bahmni_sale.group_allow_invoice_refund'):
             refund_action = self.env.ref(
                 'account.action_account_invoice_refund', raise_if_not_found=False)

@@ -25,6 +25,43 @@ class AccountPayment(models.Model):
                         "allocate deposit. Direct cash Register Payment is blocked."
                     ) % (invoice.number or invoice.id))
 
+    def _bahmni_assert_not_manual_credit_payment(self, payment):
+        """Credit invoices may only be settled via Excel reconciliation upload."""
+        if self.env.context.get('bahmni_credit_settlement_reconcile'):
+            return
+        if payment.payment_type != 'inbound' or payment.partner_type != 'customer':
+            return
+        for invoice in payment.invoice_ids:
+            if (invoice.payment_method or '').strip().lower() == 'credit':
+                raise UserError(_(
+                    "Invoice '%s' is a Credit bill. Register Payment is not allowed. "
+                    "Settle credit invoices with Accounting → Credit Settlement "
+                    "Reconciliation (Excel upload)."
+                ) % (invoice.number or invoice.id))
+
+    @api.model
+    def default_get(self, fields_list):
+        """Block opening Register Payment for Credit invoices (SO confirm / invoice button)."""
+        rec = super(AccountPayment, self).default_get(fields_list)
+        if self.env.context.get('bahmni_credit_settlement_reconcile'):
+            return rec
+        invoices = self.env['account.invoice']
+        if self.env.context.get('active_model') == 'account.invoice':
+            invoices |= self.env['account.invoice'].browse(
+                self.env.context.get('active_ids') or [])
+        # default_invoice_ids from SO confirm: [(4, id, None), ...]
+        for cmd in (self.env.context.get('default_invoice_ids') or []):
+            if isinstance(cmd, (list, tuple)) and len(cmd) >= 2 and cmd[0] == 4:
+                invoices |= self.env['account.invoice'].browse(cmd[1])
+        for invoice in invoices:
+            if (invoice.payment_method or '').strip().lower() == 'credit':
+                raise UserError(_(
+                    "Invoice '%s' is a Credit bill. Register Payment is not allowed. "
+                    "Settle credit invoices with Accounting → Credit Settlement "
+                    "Reconciliation (Excel upload)."
+                ) % (invoice.number or invoice.id))
+        return rec
+
     @api.model
     def create(self, vals):
         vals = dict(vals or {})
@@ -34,7 +71,9 @@ class AccountPayment(models.Model):
                 _("Cashiers are not allowed to refund payments. "
                   "Ask a manager if a refund is required."),
             )
-        return super(AccountPayment, self).create(vals)
+        payment = super(AccountPayment, self).create(vals)
+        self._bahmni_assert_not_manual_credit_payment(payment)
+        return payment
 
     @api.multi
     def write(self, vals):
@@ -48,7 +87,11 @@ class AccountPayment(models.Model):
                       "Ask a manager if a refund is required."),
                 )
                 break
-        return super(AccountPayment, self).write(vals)
+        res = super(AccountPayment, self).write(vals)
+        if 'invoice_ids' in (vals or {}):
+            for payment in self:
+                self._bahmni_assert_not_manual_credit_payment(payment)
+        return res
 
     @api.multi
     def cancel(self):
@@ -69,6 +112,7 @@ class AccountPayment(models.Model):
                       "Ask a manager if a refund is required."),
                 )
             self._bahmni_assert_not_bypassing_ipd_deposit(payment)
+            self._bahmni_assert_not_manual_credit_payment(payment)
         return super(AccountPayment, self).post()
 
 

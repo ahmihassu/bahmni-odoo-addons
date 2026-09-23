@@ -300,19 +300,13 @@ class SaleOrder(models.Model):
             payment_action = True
             for order in self:
                 created_invoice = order._bahmni_create_and_open_invoice()
-                payment_method = (order.payment_method or '').strip()
-                if payment_method == 'Credit':
+                if order._bahmni_is_credit_flow():
                     created_invoice.message_post(body=_(
-                        "Credit bill: receivable left open on payer '%s'."
+                        "Credit bill: receivable left open on payer '%s'. "
+                        "Settle via Credit Settlement Reconciliation (Excel)."
                     ) % (order.payer_partner_id.display_name or order.partner_invoice_id.display_name))
-                    payment_action = {
-                        'type': 'ir.actions.act_window',
-                        'res_model': 'account.invoice',
-                        'view_mode': 'form',
-                        'res_id': created_invoice.id,
-                        'target': 'current',
-                    }
-                elif payment_method == 'Free':
+                    payment_action = order._bahmni_invoice_form_action(created_invoice)
+                elif (order.payment_method or '').strip() == 'Free':
                     if order._bahmni_is_ipd_bed_order():
                         # Free does not waive bed — collect like Cash (deposit or register payment).
                         order._bahmni_allocate_ipd_deposit_on_invoice(created_invoice)
@@ -320,24 +314,12 @@ class SaleOrder(models.Model):
                         if created_invoice.residual > 0.00001:
                             payment_action = order._bahmni_register_payment_action(created_invoice)
                         else:
-                            payment_action = {
-                                'type': 'ir.actions.act_window',
-                                'res_model': 'account.invoice',
-                                'view_mode': 'form',
-                                'res_id': created_invoice.id,
-                                'target': 'current',
-                            }
+                            payment_action = order._bahmni_invoice_form_action(created_invoice)
                     else:
                         created_invoice.message_post(body=_(
                             "Free care: no payment collection required."
                         ))
-                        payment_action = {
-                            'type': 'ir.actions.act_window',
-                            'res_model': 'account.invoice',
-                            'view_mode': 'form',
-                            'res_id': created_invoice.id,
-                            'target': 'current',
-                        }
+                        payment_action = order._bahmni_invoice_form_action(created_invoice)
                 else:
                     # Cash: apply IPD deposit first, then Register Payment for remainder.
                     order._bahmni_allocate_ipd_deposit_on_invoice(created_invoice)
@@ -345,13 +327,7 @@ class SaleOrder(models.Model):
                     if created_invoice.residual > 0.00001:
                         payment_action = order._bahmni_register_payment_action(created_invoice)
                     else:
-                        payment_action = {
-                            'type': 'ir.actions.act_window',
-                            'res_model': 'account.invoice',
-                            'view_mode': 'form',
-                            'res_id': created_invoice.id,
-                            'target': 'current',
-                        }
+                        payment_action = order._bahmni_invoice_form_action(created_invoice)
             return payment_action
         else:
             # Cash IPD must still settle from deposit even without Auto Invoice group.
