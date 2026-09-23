@@ -13,5 +13,8 @@
         <record id="order_type_procedure_order" model="order.type">
             <field name="name">Procedure Order</field>
         </record>
+        <record id="order_type_bed_service" model="order.type">
+            <field name="name">Bed Service</field>
+        </record>
     </data>
 </odoo>

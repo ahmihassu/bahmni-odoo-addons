@@ -1,9 +1,29 @@
 # -*- coding: utf-8 -*-
 from odoo import api, models, _
+from odoo.exceptions import UserError
 
 
 class AccountPayment(models.Model):
     _inherit = 'account.payment'
+
+    def _bahmni_assert_not_bypassing_ipd_deposit(self, payment):
+        """Cash IPD invoices must be settled from deposit (top-up then allocate), not ad-hoc cash."""
+        if self.env.context.get('bahmni_ipd_deposit_allocation'):
+            return
+        if payment.payment_type != 'inbound' or payment.partner_type != 'customer':
+            return
+        invoices = payment.invoice_ids
+        if not invoices and hasattr(payment, 'invoice_ids'):
+            return
+        for invoice in invoices:
+            sale_orders = invoice.mapped('invoice_line_ids.sale_line_ids.order_id')
+            for order in sale_orders:
+                if order._bahmni_is_cash_ipd_order():
+                    raise UserError(_(
+                        "Cash IPD invoice '%s' must be paid from the patient IPD deposit. "
+                        "Collect an exact shortfall top-up on the patient, then confirm/"
+                        "allocate deposit. Direct cash Register Payment is blocked."
+                    ) % (invoice.number or invoice.id))
 
     @api.model
     def create(self, vals):
@@ -48,6 +68,7 @@ class AccountPayment(models.Model):
                     _("Cashiers are not allowed to refund payments. "
                       "Ask a manager if a refund is required."),
                 )
+            self._bahmni_assert_not_bypassing_ipd_deposit(payment)
         return super(AccountPayment, self).post()
 
 

@@ -16,6 +16,31 @@ class SaleConfigSettings(models.TransientModel):
     sale_price_markup = fields.Boolean(string="Determine sale price based on cost price markup")
     auto_invoice_dispensed = fields.Boolean(string="Automatically register payment for dispensed order invoice")
     auto_create_customer_address_levels = fields.Boolean(string="Automatically create customer address for state, district, level3")
+    ipd_min_deposit_amount = fields.Float(
+        string="IPD Minimum Deposit",
+        help="Fixed initial IPD deposit amount for Cash patients (cashiers cannot collect more).",
+    )
+    ipd_deposit_account_id = fields.Many2one(
+        'account.account',
+        string="IPD Deposit Liability Account",
+    )
+
+    @api.model
+    def get_default_ipd_deposit(self, fields):
+        company = self.env.user.company_id
+        return {
+            'ipd_min_deposit_amount': company.ipd_min_deposit_amount,
+            'ipd_deposit_account_id': company.ipd_deposit_account_id.id,
+        }
+
+    @api.multi
+    def set_default_ipd_deposit(self):
+        company = self.env.user.company_id
+        for record in self:
+            company.write({
+                'ipd_min_deposit_amount': record.ipd_min_deposit_amount,
+                'ipd_deposit_account_id': record.ipd_deposit_account_id.id,
+            })
 
     @api.multi
     def set_convert_dispensed(self):

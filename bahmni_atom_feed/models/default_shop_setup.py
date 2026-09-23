@@ -11,6 +11,7 @@ DEFAULT_SHOP_ORDER_TYPES = (
     ('Laboratory', 'Lab Order'),
     ('Radiology', 'Radiology Order'),
     ('Procedure', 'Procedure Order'),
+    ('IPD', 'Bed Service'),
 )
 
 # Shop name → (account code, account name). Codes use 6 digits for Ethiopia CoA.
@@ -20,6 +21,7 @@ DEFAULT_SHOP_INCOME_ACCOUNTS = {
     'Laboratory': ('110200', 'Laboratory Income'),
     'Radiology': ('110300', 'Radiology Income'),
     'Procedure': ('110400', 'Procedure Income'),
+    'IPD': ('110500', 'Bed / IPD Income'),
 }
 
 
@@ -252,10 +254,11 @@ class DefaultShopSetup(models.Model):
             ('cashier_lab', 'Laboratory Cashier', ('Laboratory',)),
             ('cashier_radiology', 'Radiology Cashier', ('Radiology',)),
             ('cashier_procedure', 'Procedure Cashier', ('Procedure',)),
+            ('cashier_ipd', 'IPD Cashier', ('IPD',)),
             ('cashier_lab_rad', 'Lab + Radiology Cashier', ('Laboratory', 'Radiology')),
             ('cashier_clinical', 'Clinical Shops Cashier',
              ('Laboratory', 'Radiology', 'Procedure')),
-            ('cashier_front', 'Front Desk Cashier', ('MRU', 'Laboratory')),
+            ('cashier_front', 'Front Desk Cashier', ('MRU', 'Laboratory', 'IPD')),
         )
         password = 'Cashier@123'
         group_ids = [group_cashier.id]

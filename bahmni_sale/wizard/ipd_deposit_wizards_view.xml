@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data>
+        <record id="view_bahmni_ipd_deposit_register_form" model="ir.ui.view">
+            <field name="name">bahmni.ipd.deposit.register.form</field>
+            <field name="model">bahmni.ipd.deposit.register</field>
+            <field name="arch" type="xml">
+                <form string="Register IPD Deposit">
+                    <group>
+                        <field name="partner_id"/>
+                        <field name="payment_method"/>
+                        <field name="current_balance"/>
+                        <field name="currency_id" invisible="1"/>
+                        <field name="amount"/>
+                        <field name="journal_id"/>
+                    </group>
+                    <footer>
+                        <button name="action_collect" type="object" string="Collect Deposit"
+                                class="btn-primary"/>
+                        <button string="Cancel" class="btn-default" special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <record id="view_bahmni_ipd_deposit_topup_form" model="ir.ui.view">
+            <field name="name">bahmni.ipd.deposit.topup.form</field>
+            <field name="model">bahmni.ipd.deposit.topup</field>
+            <field name="arch" type="xml">
+                <form string="IPD Deposit Top-up">
+                    <group>
+                        <field name="partner_id"/>
+                        <field name="current_balance"/>
+                        <field name="currency_id" invisible="1"/>
+                        <field name="required_amount"/>
+                        <field name="amount"/>
+                        <field name="journal_id"/>
+                    </group>
+                    <footer>
+                        <button name="action_collect" type="object" string="Collect Exact Shortfall"
+                                class="btn-primary"/>
+                        <button string="Cancel" class="btn-default" special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <record id="view_bahmni_ipd_deposit_refund_form" model="ir.ui.view">
+            <field name="name">bahmni.ipd.deposit.refund.form</field>
+            <field name="model">bahmni.ipd.deposit.refund</field>
+            <field name="arch" type="xml">
+                <form string="IPD Deposit Refund">
+                    <group>
+                        <field name="partner_id"/>
+                        <field name="current_balance"/>
+                        <field name="currency_id" invisible="1"/>
+                        <field name="amount"/>
+                        <field name="journal_id"/>
+                        <field name="state" invisible="1"/>
+                        <field name="movement_id" invisible="1"/>
+                    </group>
+                    <footer>
+                        <button name="action_submit_for_approval" type="object"
+                                string="Submit for Approval" class="btn-primary"/>
+                        <button string="Cancel" class="btn-default" special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <record id="view_bahmni_ipd_deposit_movement_tree" model="ir.ui.view">
+            <field name="name">bahmni.ipd.deposit.movement.tree</field>
+            <field name="model">bahmni.ipd.deposit.movement</field>
+            <field name="arch" type="xml">
+                <tree string="IPD Deposit Movements" create="false" edit="false" delete="false">
+                    <field name="create_date"/>
+                    <field name="receipt_number"/>
+                    <field name="partner_id"/>
+                    <field name="movement_type"/>
+                    <field name="amount"/>
+                    <field name="balance_after"/>
+                    <field name="cashier_id"/>
+                    <field name="approved_by"/>
+                    <field name="state"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="view_bahmni_ipd_deposit_movement_form" model="ir.ui.view">
+            <field name="name">bahmni.ipd.deposit.movement.form</field>
+            <field name="model">bahmni.ipd.deposit.movement</field>
+            <field name="arch" type="xml">
+                <form string="IPD Deposit Receipt" create="false" edit="false" delete="false">
+                    <header>
+                        <button name="action_approve_refund" type="object"
+                                string="Approve &amp; Pay Refund" class="btn-primary"
+                                groups="bahmni_sale.group_ipd_deposit_refund_approve"
+                                attrs="{'invisible': ['|', ('movement_type', '!=', 'refund'), ('state', '!=', 'pending_approval')]}"/>
+                        <button name="action_reject_refund" type="object"
+                                string="Reject" class="btn-default"
+                                groups="bahmni_sale.group_ipd_deposit_refund_approve"
+                                attrs="{'invisible': ['|', ('movement_type', '!=', 'refund'), ('state', '!=', 'pending_approval')]}"/>
+                        <field name="state" widget="statusbar"
+                                statusbar_visible="pending_approval,posted,cancelled"/>
+                    </header>
+                    <sheet>
+                        <group>
+                            <field name="receipt_number"/>
+                            <field name="partner_id"/>
+                            <field name="movement_type"/>
+                            <field name="amount"/>
+                            <field name="currency_id"/>
+                            <field name="balance_after"/>
+                            <field name="cashier_id"/>
+                            <field name="approved_by"/>
+                            <field name="approved_date"/>
+                            <field name="payment_id"/>
+                            <field name="sale_order_id"/>
+                            <field name="invoice_id"/>
+                            <field name="notes"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="view_bahmni_ipd_deposit_pending_refund_tree" model="ir.ui.view">
+            <field name="name">bahmni.ipd.deposit.movement.pending.refund.tree</field>
+            <field name="model">bahmni.ipd.deposit.movement</field>
+            <field name="arch" type="xml">
+                <tree string="Pending IPD Deposit Refunds" create="false" edit="false" delete="false">
+                    <field name="create_date"/>
+                    <field name="receipt_number"/>
+                    <field name="partner_id"/>
+                    <field name="amount"/>
+                    <field name="cashier_id"/>
+                    <field name="notes"/>
+                    <field name="state"/>
+                    <button name="action_approve_refund" type="object"
+                            string="Approve &amp; Pay" class="btn-primary"
+                            groups="bahmni_sale.group_ipd_deposit_refund_approve"/>
+                    <button name="action_reject_refund" type="object"
+                            string="Reject"
+                            groups="bahmni_sale.group_ipd_deposit_refund_approve"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="view_bahmni_ipd_deposit_reconciliation_wizard" model="ir.ui.view">
+            <field name="name">bahmni.ipd.deposit.reconciliation.form</field>
+            <field name="model">bahmni.ipd.deposit.reconciliation</field>
+            <field name="arch" type="xml">
+                <form string="IPD Deposit Till Reconciliation">
+                    <group>
+                        <field name="date_from"/>
+                        <field name="date_to"/>
+                        <field name="cashier_id"/>
+                        <field name="currency_id" invisible="1"/>
+                        <field name="total_deposits" readonly="1"/>
+                        <field name="total_topups" readonly="1"/>
+                        <field name="total_refunds" readonly="1"/>
+                        <field name="expected_cash" readonly="1"/>
+                        <field name="counted_cash"/>
+                        <field name="variance" readonly="1"/>
+                        <field name="variance_note"
+                                 attrs="{'required': [('variance', '!=', 0)]}"/>
+                    </group>
+                    <footer>
+                        <button name="action_compute" type="object" string="Compute" class="btn-primary"/>
+                        <button string="Close" class="btn-default" special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_bahmni_ipd_deposit_register" model="ir.actions.act_window">
+            <field name="name">Register IPD Deposit</field>
+            <field name="res_model">bahmni.ipd.deposit.register</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+        </record>
+
+        <record id="action_bahmni_ipd_deposit_topup" model="ir.actions.act_window">
+            <field name="name">IPD Deposit Top-up</field>
+            <field name="res_model">bahmni.ipd.deposit.topup</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+        </record>
+
+        <record id="action_bahmni_ipd_deposit_refund" model="ir.actions.act_window">
+            <field name="name">IPD Deposit Refund</field>
+            <field name="res_model">bahmni.ipd.deposit.refund</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+        </record>
+
+        <record id="action_bahmni_ipd_deposit_pending_refunds" model="ir.actions.act_window">
+            <field name="name">Approve Deposit Refunds</field>
+            <field name="res_model">bahmni.ipd.deposit.movement</field>
+            <field name="view_mode">tree,form</field>
+            <field name="domain">[('movement_type', '=', 'refund'), ('state', '=', 'pending_approval')]</field>
+            <field name="context">{}</field>
+            <field name="view_ids" eval="[(5, 0, 0),
+                (0, 0, {'view_mode': 'tree', 'view_id': ref('view_bahmni_ipd_deposit_pending_refund_tree')}),
+                (0, 0, {'view_mode': 'form', 'view_id': ref('view_bahmni_ipd_deposit_movement_form')})]"/>
+        </record>
+
+        <record id="action_bahmni_ipd_deposit_movement" model="ir.actions.act_window">
+            <field name="name">IPD Deposit Movements</field>
+            <field name="res_model">bahmni.ipd.deposit.movement</field>
+            <field name="view_mode">tree,form</field>
+        </record>
+
+        <record id="action_bahmni_ipd_deposit_reconciliation" model="ir.actions.act_window">
+            <field name="name">IPD Deposit Till Reconciliation</field>
+            <field name="res_model">bahmni.ipd.deposit.reconciliation</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+        </record>
+
+        <menuitem id="menu_bahmni_ipd_deposit_root"
+                  name="IPD Deposits"
+                  parent="sales_team.menu_base_partner"
+                  sequence="45"/>
+        <menuitem id="menu_bahmni_ipd_deposit_register"
+                  name="Register Deposit"
+                  parent="menu_bahmni_ipd_deposit_root"
+                  action="action_bahmni_ipd_deposit_register"
+                  sequence="10"/>
+        <menuitem id="menu_bahmni_ipd_deposit_topup"
+                  name="Top-up (Exact Shortfall)"
+                  parent="menu_bahmni_ipd_deposit_root"
+                  action="action_bahmni_ipd_deposit_topup"
+                  sequence="20"/>
+        <menuitem id="menu_bahmni_ipd_deposit_refund"
+                  name="Request Refund"
+                  parent="menu_bahmni_ipd_deposit_root"
+                  action="action_bahmni_ipd_deposit_refund"
+                  sequence="30"/>
+        <menuitem id="menu_bahmni_ipd_deposit_pending_refunds"
+                  name="Approve Refunds"
+                  parent="menu_bahmni_ipd_deposit_root"
+                  action="action_bahmni_ipd_deposit_pending_refunds"
+                  groups="bahmni_sale.group_ipd_deposit_refund_approve"
+                  sequence="35"/>
+        <menuitem id="menu_bahmni_ipd_deposit_movements"
+                  name="Deposit Movements"
+                  parent="menu_bahmni_ipd_deposit_root"
+                  action="action_bahmni_ipd_deposit_movement"
+                  sequence="40"/>
+        <menuitem id="menu_bahmni_ipd_deposit_reconciliation"
+                  name="Till Reconciliation"
+                  parent="menu_bahmni_ipd_deposit_root"
+                  action="action_bahmni_ipd_deposit_reconciliation"
+                  sequence="50"/>
+    </data>
+</odoo>

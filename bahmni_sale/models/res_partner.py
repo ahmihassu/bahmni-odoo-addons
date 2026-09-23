@@ -57,6 +57,97 @@ class ResPartner(models.Model):
     shi_woreda = fields.Char(string="SHI Woreda", readonly=True, copy=False)
     shi_kebele = fields.Char(string="SHI Kebele", readonly=True, copy=False)
 
+    ipd_deposit_balance = fields.Monetary(
+        string="IPD Deposit Balance",
+        currency_field='ipd_deposit_currency_id',
+        readonly=True,
+        copy=False,
+        help="Prepaid IPD deposit for Cash patients. Changed only via deposit wizards.",
+    )
+    ipd_deposit_currency_id = fields.Many2one(
+        'res.currency', string="Deposit Currency",
+        default=lambda self: self.env.user.company_id.currency_id,
+        readonly=True,
+    )
+    ipd_deposit_movement_ids = fields.One2many(
+        'bahmni.ipd.deposit.movement', 'partner_id', string="IPD Deposit Movements")
+
+    @api.multi
+    def write(self, vals):
+        if 'ipd_deposit_balance' in vals and not self.env.context.get('allow_ipd_deposit_write'):
+            from odoo.exceptions import AccessError
+            from odoo import _
+            if not self.env.user.has_group('base.group_system'):
+                raise AccessError(_(
+                    "IPD deposit balance can only be changed through the deposit wizards."
+                ))
+        return super(ResPartner, self).write(vals)
+
+    @api.multi
+    def bahmni_ipd_deposit_committed(self, exclude_order=None):
+        """Amount already spoken for by open IPD sale orders / unpaid invoices.
+
+        Draft/sent orders reserve their full total. Confirmed orders reserve unpaid
+        invoice residual, or the full total when not yet invoiced.
+        """
+        self.ensure_one()
+        SaleOrder = self.env['sale.order']
+        domain = [
+            ('partner_id', '=', self.id),
+            ('care_setting', '=', 'ipd'),
+            ('state', 'in', ('draft', 'sent', 'sale')),
+        ]
+        if exclude_order:
+            domain.append(('id', '!=', exclude_order.id))
+        committed = 0.0
+        Movement = self.env['bahmni.ipd.deposit.movement']
+        for order in SaleOrder.search(domain):
+            charged = sum(Movement.search([
+                ('partner_id', '=', self.id),
+                ('sale_order_id', '=', order.id),
+                ('movement_type', '=', 'charge'),
+                ('state', '=', 'posted'),
+            ]).mapped('amount'))
+            if order.state in ('draft', 'sent'):
+                remaining = max((order.amount_total or 0.0) - charged, 0.0)
+            else:
+                invoices = order.invoice_ids.filtered(lambda i: i.state not in ('cancel',))
+                if invoices:
+                    remaining = max(sum(invoices.mapped('residual')), 0.0)
+                else:
+                    remaining = max((order.amount_total or 0.0) - charged, 0.0)
+            committed += remaining
+        return committed
+
+    @api.multi
+    def bahmni_ipd_deposit_available(self, exclude_order=None):
+        """Deposit balance minus open IPD commitments."""
+        self.ensure_one()
+        balance = self.ipd_deposit_balance or 0.0
+        return max(balance - self.bahmni_ipd_deposit_committed(exclude_order=exclude_order), 0.0)
+
+    @api.multi
+    def bahmni_adjust_ipd_deposit(self, delta, movement_type, payment=None,
+                                  sale_order=None, invoice=None, notes=None,
+                                  state='posted', approved_by=None):
+        """Adjust deposit balance and create an audit movement. Returns the movement."""
+        from odoo.exceptions import UserError
+        from odoo import _
+        self.ensure_one()
+        new_balance = (self.ipd_deposit_balance or 0.0) + delta
+        if new_balance < -0.00001:
+            raise UserError(_(
+                "IPD deposit balance for '%s' would become negative (%.2f)."
+            ) % (self.display_name, new_balance))
+        self.with_context(allow_ipd_deposit_write=True).sudo().write({
+            'ipd_deposit_balance': max(new_balance, 0.0),
+        })
+        return self.env['bahmni.ipd.deposit.movement'].create_posted_movement(
+            self, movement_type, abs(delta), self.ipd_deposit_balance,
+            payment=payment, sale_order=sale_order, invoice=invoice,
+            notes=notes, state=state, approved_by=approved_by,
+        )
+
 
     # inherited to update display name w.r.t. ref field 
     # and hence user can search customer with reference too

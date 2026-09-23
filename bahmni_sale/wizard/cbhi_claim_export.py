@@ -31,6 +31,7 @@ SHOP_SERVICE_COLUMN = {
     'Laboratory': 'lab',
     'Radiology': 'imaging',
     'Procedure': 'procedure',
+    'IPD': 'bed',
 }
 
 SERVICE_KEYS = (
