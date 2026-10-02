@@ -284,6 +284,14 @@ class SaleOrder(models.Model):
             'disc_acc_id': self.disc_acc_id.id,
             'discount': self.discount,
             'shop_id': self.shop_id.id,
+            # Payment snapshot (also set in sale_order_payment; kept here so Credit
+            # detection never misses payment_method on the invoice after confirm).
+            'payment_method': self.payment_method,
+            'credit_information': self.credit_information,
+            'credit_companies': self.credit_companies,
+            'free_reason': self.free_reason,
+            'payer_partner_id': self.payer_partner_id.id if self.payer_partner_id else False,
+            'patient_partner_id': self.partner_id.id if self.partner_id else False,
         }
         return invoice_vals
 
@@ -300,13 +308,22 @@ class SaleOrder(models.Model):
             payment_action = True
             for order in self:
                 created_invoice = order._bahmni_create_and_open_invoice()
-                if order._bahmni_is_credit_flow():
+                # Credit must never open Register Payment (Excel settlement only).
+                if order._bahmni_is_credit_flow() or created_invoice.bahmni_is_credit:
+                    if (created_invoice.payment_method or '').strip().lower() != 'credit':
+                        created_invoice.sudo().write({
+                            'payment_method': order.payment_method or 'Credit',
+                            'credit_information': order.credit_information,
+                            'payer_partner_id': order.payer_partner_id.id,
+                            'patient_partner_id': order.partner_id.id,
+                        })
                     created_invoice.message_post(body=_(
                         "Credit bill: receivable left open on payer '%s'. "
                         "Settle via Credit Settlement Reconciliation (Excel)."
                     ) % (order.payer_partner_id.display_name or order.partner_invoice_id.display_name))
                     payment_action = order._bahmni_invoice_form_action(created_invoice)
-                elif (order.payment_method or '').strip() == 'Free':
+                    continue
+                if (order.payment_method or '').strip() == 'Free':
                     if order._bahmni_is_ipd_bed_order():
                         # Free does not waive bed — collect like Cash (deposit or register payment).
                         order._bahmni_allocate_ipd_deposit_on_invoice(created_invoice)
@@ -320,14 +337,14 @@ class SaleOrder(models.Model):
                             "Free care: no payment collection required."
                         ))
                         payment_action = order._bahmni_invoice_form_action(created_invoice)
+                    continue
+                # Cash: apply IPD deposit first, then Register Payment for remainder.
+                order._bahmni_allocate_ipd_deposit_on_invoice(created_invoice)
+                created_invoice.invalidate_cache()
+                if created_invoice.residual > 0.00001:
+                    payment_action = order._bahmni_register_payment_action(created_invoice)
                 else:
-                    # Cash: apply IPD deposit first, then Register Payment for remainder.
-                    order._bahmni_allocate_ipd_deposit_on_invoice(created_invoice)
-                    created_invoice.invalidate_cache()
-                    if created_invoice.residual > 0.00001:
-                        payment_action = order._bahmni_register_payment_action(created_invoice)
-                    else:
-                        payment_action = order._bahmni_invoice_form_action(created_invoice)
+                    payment_action = order._bahmni_invoice_form_action(created_invoice)
             return payment_action
         else:
             # Cash IPD must still settle from deposit even without Auto Invoice group.
@@ -435,7 +452,7 @@ class SaleOrder(models.Model):
     def validate_payment(self):
         for obj in self:
             payment_method = (obj.payment_method or '').strip()
-            if payment_method == 'Credit':
+            if obj._bahmni_is_credit_flow():
                 obj._bahmni_validate_payment_for_confirm()
                 # Invoice only — leave AR open on the payer.
                 inv_data = obj._prepare_invoice()

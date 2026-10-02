@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Bahmni Sale',
-    'version': '1.19',
+    'version': '1.23',
     'summary': 'Custom Sales module to meet bahmni requirement',
     'sequence': 1,
     'description': """

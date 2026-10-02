@@ -2,6 +2,36 @@
 from odoo import api, models, _
 from odoo.exceptions import UserError
 
+CREDIT_SETTLEMENT_CTX = 'bahmni_credit_settlement_reconcile'
+
+CREDIT_BLOCKED_MSG = (
+    "Invoice '%s' is a Credit bill. Register Payment is not allowed. "
+    "Settle credit invoices with Accounting → Credit Settlement "
+    "Reconciliation (Excel upload)."
+)
+
+
+def _raise_if_credit_invoices(env, invoices):
+    if env.context.get(CREDIT_SETTLEMENT_CTX):
+        return
+    for invoice in invoices:
+        if invoice.bahmni_is_credit:
+            raise UserError(_(CREDIT_BLOCKED_MSG) % (invoice.number or invoice.id))
+
+
+def _invoices_from_context(env):
+    """Invoices targeted by a payment wizard opened from an invoice (form or list)."""
+    Invoice = env['account.invoice']
+    invoices = Invoice
+    if env.context.get('active_model') == 'account.invoice':
+        invoices |= Invoice.browse(env.context.get('active_ids') or [])
+    for cmd in (env.context.get('default_invoice_ids') or []):
+        if isinstance(cmd, (list, tuple)) and len(cmd) >= 2 and cmd[0] == 4:
+            invoices |= Invoice.browse(cmd[1])
+        elif isinstance(cmd, (list, tuple)) and len(cmd) == 3 and cmd[0] == 6:
+            invoices |= Invoice.browse(cmd[2] or [])
+    return invoices.exists()
+
 
 class AccountPayment(models.Model):
     _inherit = 'account.payment'
@@ -26,41 +56,22 @@ class AccountPayment(models.Model):
                     ) % (invoice.number or invoice.id))
 
     def _bahmni_assert_not_manual_credit_payment(self, payment):
-        """Credit invoices may only be settled via Excel reconciliation upload."""
-        if self.env.context.get('bahmni_credit_settlement_reconcile'):
+        """Credit invoices and payer partners may only be settled via Excel reconciliation."""
+        if self.env.context.get(CREDIT_SETTLEMENT_CTX):
             return
         if payment.payment_type != 'inbound' or payment.partner_type != 'customer':
             return
-        for invoice in payment.invoice_ids:
-            if (invoice.payment_method or '').strip().lower() == 'credit':
-                raise UserError(_(
-                    "Invoice '%s' is a Credit bill. Register Payment is not allowed. "
-                    "Settle credit invoices with Accounting → Credit Settlement "
-                    "Reconciliation (Excel upload)."
-                ) % (invoice.number or invoice.id))
+        _raise_if_credit_invoices(self.env, payment.invoice_ids)
+        if payment.partner_id.is_bahmni_payer:
+            raise UserError(_(
+                "'%s' is a Credit payer. Payments from payers can only be recorded "
+                "through Accounting → Credit Settlement Reconciliation (Excel upload)."
+            ) % payment.partner_id.display_name)
 
     @api.model
     def default_get(self, fields_list):
-        """Block opening Register Payment for Credit invoices (SO confirm / invoice button)."""
-        rec = super(AccountPayment, self).default_get(fields_list)
-        if self.env.context.get('bahmni_credit_settlement_reconcile'):
-            return rec
-        invoices = self.env['account.invoice']
-        if self.env.context.get('active_model') == 'account.invoice':
-            invoices |= self.env['account.invoice'].browse(
-                self.env.context.get('active_ids') or [])
-        # default_invoice_ids from SO confirm: [(4, id, None), ...]
-        for cmd in (self.env.context.get('default_invoice_ids') or []):
-            if isinstance(cmd, (list, tuple)) and len(cmd) >= 2 and cmd[0] == 4:
-                invoices |= self.env['account.invoice'].browse(cmd[1])
-        for invoice in invoices:
-            if (invoice.payment_method or '').strip().lower() == 'credit':
-                raise UserError(_(
-                    "Invoice '%s' is a Credit bill. Register Payment is not allowed. "
-                    "Settle credit invoices with Accounting → Credit Settlement "
-                    "Reconciliation (Excel upload)."
-                ) % (invoice.number or invoice.id))
-        return rec
+        _raise_if_credit_invoices(self.env, _invoices_from_context(self.env))
+        return super(AccountPayment, self).default_get(fields_list)
 
     @api.model
     def create(self, vals):
@@ -88,7 +99,7 @@ class AccountPayment(models.Model):
                 )
                 break
         res = super(AccountPayment, self).write(vals)
-        if 'invoice_ids' in (vals or {}):
+        if 'invoice_ids' in (vals or {}) or 'partner_id' in (vals or {}):
             for payment in self:
                 self._bahmni_assert_not_manual_credit_payment(payment)
         return res
@@ -116,6 +127,33 @@ class AccountPayment(models.Model):
         return super(AccountPayment, self).post()
 
 
+class AccountRegisterPayments(models.TransientModel):
+    """Multi-invoice Register Payment (invoice list → Action → Register Payment)."""
+
+    _inherit = 'account.register.payments'
+
+    @api.model
+    def default_get(self, fields_list):
+        _raise_if_credit_invoices(self.env, _invoices_from_context(self.env))
+        return super(AccountRegisterPayments, self).default_get(fields_list)
+
+
+class AccountMoveLine(models.Model):
+    _inherit = 'account.move.line'
+
+    @api.multi
+    def reconcile(self, writeoff_acc_id=False, writeoff_journal_id=False):
+        """Block manual/bank/outstanding-credit reconciliation against Credit bills."""
+        if not self.env.context.get(CREDIT_SETTLEMENT_CTX) and \
+                not self.env.context.get('bahmni_credit_refund'):
+            credit_invoices = self.filtered(
+                lambda l: l.invoice_id and l.account_id.internal_type == 'receivable'
+            ).mapped('invoice_id')
+            _raise_if_credit_invoices(self.env, credit_invoices)
+        return super(AccountMoveLine, self).reconcile(
+            writeoff_acc_id=writeoff_acc_id, writeoff_journal_id=writeoff_journal_id)
+
+
 class AccountInvoiceRefund(models.TransientModel):
     _inherit = 'account.invoice.refund'
 
@@ -126,4 +164,6 @@ class AccountInvoiceRefund(models.TransientModel):
             _("Cashiers are not allowed to refund payments or create credit notes. "
               "Ask a manager if a refund is required."),
         )
-        return super(AccountInvoiceRefund, self).invoice_refund()
+        # Credit notes (cancel/modify) may still close a wrongly issued Credit bill.
+        return super(AccountInvoiceRefund, self.with_context(
+            bahmni_credit_refund=True)).invoice_refund()
