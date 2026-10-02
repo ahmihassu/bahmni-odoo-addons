@@ -293,6 +293,15 @@ class SaleOrder(models.Model):
     def _bahmni_create_and_open_invoice(self):
         self.ensure_one()
         inv_data = self._prepare_invoice()
+        # Guarantee payment classification lands on the invoice (confirm branches on it).
+        inv_data.update({
+            'payment_method': self.payment_method,
+            'credit_information': self.credit_information,
+            'credit_companies': self.credit_companies,
+            'free_reason': self.free_reason,
+            'payer_partner_id': self.payer_partner_id.id if self.payer_partner_id else False,
+            'patient_partner_id': self.partner_id.id if self.partner_id else False,
+        })
         invoice = self.env['account.invoice'].create(inv_data)
         for line in self.order_line:
             line.invoice_line_create(invoice.id, line.product_uom_qty)
@@ -344,10 +353,12 @@ class SaleOrder(models.Model):
     @api.multi
     def _bahmni_invoice_form_action(self, invoice):
         self.ensure_one()
+        form = self.env.ref('account.invoice_form', raise_if_not_found=False)
         return {
             'type': 'ir.actions.act_window',
             'res_model': 'account.invoice',
             'view_mode': 'form',
+            'views': [(form.id if form else False, 'form')],
             'res_id': invoice.id,
             'target': 'current',
         }
@@ -356,8 +367,10 @@ class SaleOrder(models.Model):
     def _bahmni_register_payment_action(self, invoice):
         """Open Register Payment for Cash only; Credit invoices never open this wizard."""
         self.ensure_one()
-        if self._bahmni_is_credit_flow() or (
-                invoice and (invoice.payment_method or '').strip().lower() == 'credit'):
+        invoice = invoice.exists() and invoice or self.env['account.invoice']
+        if invoice:
+            invoice.invalidate_cache()
+        if self._bahmni_is_credit_flow() or (invoice and invoice.bahmni_is_credit):
             return self._bahmni_invoice_form_action(invoice)
         cash_journal = self._bahmni_get_default_cash_journal()
         ctx = dict(

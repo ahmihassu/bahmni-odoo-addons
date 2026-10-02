@@ -271,7 +271,7 @@ class BahmniCreditSettlementWizard(models.TransientModel):
         domain = [
             ('type', '=', 'out_invoice'),
             ('state', '=', 'open'),
-            ('payment_method', '=', 'Credit'),
+            ('bahmni_is_credit', '=', True),
             ('company_id', '=', self.company_id.id),
         ]
         if self.credit_type and self.credit_type != 'all':
@@ -555,7 +555,7 @@ class BahmniCreditSettlementWizard(models.TransientModel):
         domain = [
             ('type', '=', 'out_invoice'),
             ('state', '=', 'open'),
-            ('payment_method', '=', 'Credit'),
+            ('bahmni_is_credit', '=', True),
             ('company_id', '=', self.company_id.id),
             ('number', '=', invoice_number),
         ]
@@ -567,7 +567,7 @@ class BahmniCreditSettlementWizard(models.TransientModel):
         candidates = Invoice.search([
             ('type', '=', 'out_invoice'),
             ('state', '=', 'open'),
-            ('payment_method', '=', 'Credit'),
+            ('bahmni_is_credit', '=', True),
             ('company_id', '=', self.company_id.id),
         ])
         for inv in candidates:

@@ -48,6 +48,13 @@ class AccountInvoice(models.Model):
     shi_zone = fields.Char(string="SHI Zone", readonly=True, copy=False)
     shi_woreda = fields.Char(string="SHI Woreda", readonly=True, copy=False)
     shi_kebele = fields.Char(string="SHI Kebele", readonly=True, copy=False)
+    bahmni_is_credit = fields.Boolean(
+        string="Credit Bill",
+        compute='_compute_bahmni_is_credit',
+        store=True,
+        help="Credit (payer) invoices can only be settled through Credit Settlement "
+             "Reconciliation (Excel upload).",
+    )
 
     _BAHMNI_DISCOUNT_WRITE_FIELDS = (
         'discount', 'discount_percentage', 'discount_type', 'disc_acc_id',
@@ -88,11 +95,24 @@ class AccountInvoice(models.Model):
                     ))
         return super(AccountInvoice, self).write(vals)
 
+    @api.depends('type', 'payment_method', 'credit_information', 'payer_partner_id',
+                 'partner_id.is_bahmni_payer')
+    def _compute_bahmni_is_credit(self):
+        for invoice in self:
+            invoice.bahmni_is_credit = invoice.type == 'out_invoice' and bool(
+                (invoice.payment_method or '').strip().lower() == 'credit'
+                or (invoice.credit_information or '').strip()
+                or invoice.payer_partner_id
+                or invoice.partner_id.is_bahmni_payer
+            )
+
     def _bahmni_is_credit_invoice(self):
         self.ensure_one()
-        return (self.payment_method or '').strip().lower() == 'credit'
+        return self.bahmni_is_credit
 
     def _bahmni_raise_if_credit_register_payment(self):
+        if self.env.context.get('bahmni_credit_settlement_reconcile'):
+            return
         for invoice in self:
             if invoice._bahmni_is_credit_invoice():
                 raise UserError(_(
@@ -100,6 +120,11 @@ class AccountInvoice(models.Model):
                     "Settle credit invoices with Accounting → Credit Settlement "
                     "Reconciliation (Excel upload)."
                 ) % (invoice.number or invoice.id))
+
+    @api.multi
+    def assign_outstanding_credit(self, credit_aml_id):
+        self._bahmni_raise_if_credit_register_payment()
+        return super(AccountInvoice, self).assign_outstanding_credit(credit_aml_id)
 
     @api.multi
     def action_invoice_register_payment(self):
@@ -169,8 +194,7 @@ class AccountInvoice(models.Model):
             return result
         Users = self.env['res.users']
         doc = etree.XML(result['arch'])
-        # Register Payment visibility for Credit is set in account_invoice_view.xml
-        # (attrs need payment_method on the same form; do not patch every invoice form here).
+        self._bahmni_hide_payment_entry_points(doc, result)
         if Users.bahmni_is_restricted_cashier('bahmni_sale.group_allow_invoice_refund'):
             refund_action = self.env.ref(
                 'account.action_account_invoice_refund', raise_if_not_found=False)
@@ -202,3 +226,47 @@ class AccountInvoice(models.Model):
                         setup_modifiers(node, result['fields'][fname])
         result['arch'] = etree.tostring(doc)
         return result
+
+    @api.model
+    def _bahmni_hide_payment_entry_points(self, doc, result):
+        """Hide Register Payment and outstanding-credit assignment on Credit bills.
+
+        Applied to every account.invoice form (customer, vendor, custom), because
+        actions that open an invoice without an explicit view may not use invoice_form.
+        """
+        payment_action = self.env.ref(
+            'account.action_account_invoice_payment', raise_if_not_found=False)
+        payment_action_id = str(payment_action.id) if payment_action else None
+        buttons = []
+        for node in doc.xpath("//button"):
+            name = node.get('name') or ''
+            string = (node.get('string') or '').strip().lower()
+            if (payment_action_id and name == payment_action_id) or name in (
+                    'action_invoice_register_payment', 'invoice_pay_customer',
+            ) or string == 'register payment':
+                buttons.append(node)
+        widgets = doc.xpath("//field[@name='outstanding_credits_debits_widget']")
+        if not buttons and not widgets:
+            return
+
+        fields_info = result.setdefault('fields', {})
+        if 'bahmni_is_credit' not in fields_info:
+            fields_info.update(self.fields_get(['bahmni_is_credit']))
+            flag = etree.Element('field', name='bahmni_is_credit', invisible='1')
+            setup_modifiers(flag, fields_info['bahmni_is_credit'])
+            headers = doc.xpath("//header")
+            (headers[0] if headers else doc).insert(0, flag)
+
+        for node in buttons:
+            # 'states' would be AND-ed with attrs by setup_modifiers; fold it into attrs.
+            node.attrib.pop('states', None)
+            node.set('attrs', "{'invisible': ['|', ('state', '!=', 'open'), "
+                              "('bahmni_is_credit', '=', True)]}")
+            setup_modifiers(node)
+        for node in widgets:
+            if 'has_outstanding' in fields_info:
+                node.set('attrs', "{'invisible': ['|', ('has_outstanding', '=', False), "
+                                  "('bahmni_is_credit', '=', True)]}")
+            else:
+                node.set('attrs', "{'invisible': [('bahmni_is_credit', '=', True)]}")
+            setup_modifiers(node, fields_info.get('outstanding_credits_debits_widget'))
