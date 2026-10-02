@@ -9,6 +9,7 @@ from io import BytesIO
 
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
+from odoo.osv import expression
 from odoo.tools import DEFAULT_SERVER_DATE_FORMAT as DF
 
 from odoo.addons.bahmni_sale.wizard.ethiopian_calendar import (
@@ -18,6 +19,22 @@ from odoo.addons.bahmni_sale.wizard.ethiopian_calendar import (
     format_ethiopian_date,
     gregorian_to_ethiopian,
 )
+
+# claim_type → res.partner.bahmni_payer_type
+CLAIM_TYPE_TO_PAYER_TYPE = {
+    'CBHI': 'cbhi',
+    'SHI': 'shi',
+    'Insurance': 'insurance',
+    'Credit Companies': 'credit_company',
+}
+
+# claim_type → invoice Char field used as payer identity (legacy / fallback)
+CLAIM_TYPE_TO_CHAR_FIELDS = {
+    'CBHI': ('cbhi_woreda',),
+    'SHI': ('shi_woreda',),
+    'Insurance': ('insurance_woreda', 'insurance_name'),
+    'Credit Companies': ('credit_companies',),
+}
 
 _logger = logging.getLogger(__name__)
 
@@ -76,6 +93,17 @@ class CbhiClaimExport(models.TransientModel):
         required=True,
         default=lambda self: self.env.user.company_id,
     )
+    payer_partner_ids = fields.Many2many(
+        'res.partner',
+        'bahmni_cbhi_claim_export_payer_rel',
+        'export_id',
+        'partner_id',
+        string="Woreda / Credit Company",
+        help="Optional. Leave empty to include all payers of the selected claim type. "
+             "Select one or more woredas (CBHI / SHI / Insurance) or credit companies "
+             "to generate a claim report for those payers only.",
+        domain="[('is_bahmni_payer', '=', True)]",
+    )
     data = fields.Binary(string="Excel file", readonly=True)
     data_fname = fields.Char(string="File Name", readonly=True)
     state = fields.Selection(
@@ -83,6 +111,17 @@ class CbhiClaimExport(models.TransientModel):
         default='choose',
     )
     invoice_count = fields.Integer(string="Invoices included", readonly=True)
+
+    @api.onchange('claim_type')
+    def _onchange_claim_type(self):
+        self.payer_partner_ids = [(5, 0, 0)]
+        payer_type = CLAIM_TYPE_TO_PAYER_TYPE.get(self.claim_type)
+        domain = [('is_bahmni_payer', '=', True)]
+        if payer_type:
+            domain.append(('bahmni_payer_type', '=', payer_type))
+        else:
+            domain = [('id', '=', False)]
+        return {'domain': {'payer_partner_ids': domain}}
 
     @api.multi
     def action_generate_excel(self):
@@ -97,11 +136,17 @@ class CbhiClaimExport(models.TransientModel):
         date_start, date_end = ethiopian_month_date_range(self.eth_year, int(self.eth_month))
         invoices = self._find_credit_invoices(date_start, date_end)
         if not invoices:
+            payer_hint = ''
+            if self.payer_partner_ids:
+                payer_hint = _(' for payer(s) %s') % (
+                    u', '.join(self.payer_partner_ids.mapped('name'))
+                )
             raise UserError(_(
-                "No open %s credit invoices found for Ethiopian %s %s "
+                "No open %s credit invoices found%s for Ethiopian %s %s "
                 "(Gregorian %s \u2192 %s)."
             ) % (
                 self.claim_type,
+                payer_hint,
                 eth_month_amharic(self.eth_month),
                 self.eth_year,
                 date_start.strftime(DF),
@@ -136,8 +181,27 @@ class CbhiClaimExport(models.TransientModel):
             'target': 'new',
         }
 
-    @api.model
+    def _payer_filter_domain(self):
+        """Domain limiting invoices to selected woreda / credit-company payers.
+
+        Prefers payer_partner_id; also matches legacy Char attributes so older
+        invoices without a linked payer partner are still included.
+        """
+        self.ensure_one()
+        if not self.payer_partner_ids:
+            return []
+
+        payer_ids = self.payer_partner_ids.ids
+        names = [n for n in self.payer_partner_ids.mapped('name') if n]
+        clauses = [[('payer_partner_id', 'in', payer_ids)]]
+        for char_field in CLAIM_TYPE_TO_CHAR_FIELDS.get(self.claim_type, ()):
+            if names:
+                clauses.append([(char_field, 'in', names)])
+        return expression.OR(clauses)
+
+    @api.multi
     def _find_credit_invoices(self, date_start, date_end):
+        self.ensure_one()
         Invoice = self.env['account.invoice'].sudo()
         domain = [
             ('type', '=', 'out_invoice'),
@@ -148,6 +212,9 @@ class CbhiClaimExport(models.TransientModel):
             ('date_invoice', '<=', date_end.strftime(DF)),
             ('company_id', '=', self.company_id.id),
         ]
+        payer_domain = self._payer_filter_domain()
+        if payer_domain:
+            domain = expression.AND([domain, payer_domain])
         invoices = Invoice.search(domain, order='date_invoice asc, id asc')
         return invoices.filtered(lambda inv: inv.residual > 0.00001)
 
