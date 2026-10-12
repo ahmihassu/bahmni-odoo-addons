@@ -61,8 +61,29 @@ class SaleOrderLine(models.Model):
                         )
                         break
 
+    @api.depends('product_uom_qty', 'discount', 'price_unit', 'tax_id')
+    def _compute_amount(self):
+        """Line totals are the discounted price. Tax is never added or extracted."""
+        for line in self:
+            price = line.price_unit * (1 - (line.discount or 0.0) / 100.0)
+            amount = price * line.product_uom_qty
+            currency = line.order_id.pricelist_id.currency_id or line.company_id.currency_id
+            if currency:
+                amount = currency.round(amount)
+            line.update({
+                'price_tax': 0.0,
+                'price_total': amount,
+                'price_subtotal': amount,
+            })
+
+    @api.multi
+    def _compute_tax_id(self):
+        for line in self:
+            line.tax_id = [(6, 0, [])]
+
     @api.model
     def create(self, vals):
+        vals = dict(vals, tax_id=[(6, 0, [])])
         # Allow default price from product onchain; only block explicit non-default
         # price edits on write. On create, still block explicit discount.
         if 'discount' in vals and vals.get('discount'):
@@ -75,8 +96,17 @@ class SaleOrderLine(models.Model):
 
     @api.multi
     def write(self, vals):
+        vals = dict(vals)
         self._bahmni_check_cashier_line_restrictions(vals, existing=self)
-        return super(SaleOrderLine, self).write(vals)
+        open_lines = self.filtered(lambda line: line.order_id.invoice_status != 'invoiced')
+        invoiced_lines = self - open_lines
+        if open_lines:
+            super(SaleOrderLine, open_lines).write(dict(vals, tax_id=[(6, 0, [])]))
+        if invoiced_lines:
+            invoiced_vals = dict(vals)
+            invoiced_vals.pop('tax_id', None)
+            super(SaleOrderLine, invoiced_lines).write(invoiced_vals)
+        return True
 
     @api.onchange('lot_id')
     def onchange_lot_id(self):
@@ -114,6 +144,7 @@ class SaleOrderLine(models.Model):
         """Prefer the shop income account when configured on the order's shop."""
         self.ensure_one()
         res = super(SaleOrderLine, self)._prepare_invoice_line(qty)
+        res['invoice_line_tax_ids'] = [(6, 0, [])]
         shop = self.order_id.shop_id
         if shop and shop.income_account_id:
             account = shop._bahmni_map_income_account(self.order_id.fiscal_position_id)

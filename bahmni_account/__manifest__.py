@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Bahmni Account',
-    'version': '1.1',
+    'version': '1.2',
     'summary': 'Custom account module to meet bahmni requirement',
     'sequence': 1,
     'description': """
@@ -20,6 +20,7 @@ Bahmni Account
              'report/account_report.xml',
              'security/ir.model.access.csv',
              'views/account_payment.xml',
+             'data/disable_taxes.xml',
              'report/report_invoice_inherit.xml'
              ],
     'demo': [],

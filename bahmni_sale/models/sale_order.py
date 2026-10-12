@@ -25,13 +25,10 @@ class SaleOrder(models.Model):
             amount_untaxed = amount_tax = 0.0
             for line in order.order_line:
                 amount_untaxed += line.price_subtotal
-                # FORWARDPORT UP TO 10.0
-                if order.company_id.tax_calculation_rounding_method == 'round_globally':
-                    price = line.price_unit * (1 - (line.discount or 0.0) / 100.0)
-                    taxes = line.tax_id.compute_all(price, line.order_id.currency_id, line.product_uom_qty, product=line.product_id, partner=order.partner_shipping_id)
-                    amount_tax += sum(t.get('amount', 0.0) for t in taxes.get('taxes', []))
-                else:
+                if order.invoice_status == 'invoiced':
                     amount_tax += line.price_tax
+            if order.invoice_status != 'invoiced':
+                amount_tax = 0.0
             amount_total = amount_untaxed + amount_tax
             if order.chargeable_amount > 0.0:
                 discount = amount_total - order.chargeable_amount

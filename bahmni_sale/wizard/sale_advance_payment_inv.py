@@ -38,11 +38,7 @@ class SaleAdvancePaymentInv(models.TransientModel):
         else:
             amount = self.amount
             name = _('Down Payment')
-        taxes = self.product_id.taxes_id.filtered(lambda r: not order.company_id or r.company_id == order.company_id)
-        if order.fiscal_position_id and taxes:
-            tax_ids = order.fiscal_position_id.map_tax(taxes).ids
-        else:
-            tax_ids = taxes.ids
+        tax_ids = []
         invoice_values = {
                           'name': order.client_order_ref or order.name,
                           'origin': order.name,

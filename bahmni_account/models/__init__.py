@@ -5,3 +5,4 @@ import account_invoice_line
 import account_config_settings
 import res_company
 import account_payment
+import no_tax

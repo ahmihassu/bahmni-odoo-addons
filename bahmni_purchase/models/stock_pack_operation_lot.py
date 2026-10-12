@@ -20,14 +20,7 @@ class StockPackOperationLot(models.Model):
                 for link in mv_op_link_ids:
                     res.update({'move_id': link.move_id.id})
                     purchase_line = link.move_id.purchase_line_id
-                    amount_tax = 0.0
-                    if pack_operation.picking_id.company_id.tax_calculation_rounding_method == 'round_globally':
-                        taxes = purchase_line.taxes_id.compute_all(purchase_line.price_unit, purchase_line.order_id.currency_id,
-                                                                   1.0, pack_operation.product_id, pack_operation.picking_id.partner_id)
-                        amount_tax += sum(t.get('amount', 0.0) for t in taxes.get('taxes', []))
-                    else:
-                        amount_tax += purchase_line.price_tax
-                    res.update({'cost_price': purchase_line.price_unit + amount_tax})
+                    res.update({'cost_price': purchase_line.price_unit})
         # calculate sale price, based on markup percentage defined in price markup table
         if res.get('cost_price'):
             cost_price = res.get('cost_price')

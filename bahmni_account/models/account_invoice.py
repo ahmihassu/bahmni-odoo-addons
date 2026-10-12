@@ -21,7 +21,10 @@ class AccountInvoice(models.Model):
     def _compute_amount(self):
         round_curr = self.currency_id.round
         self.amount_untaxed = sum(line.price_subtotal for line in self.invoice_line_ids)
-        self.amount_tax = sum(round_curr(line.amount) for line in self.tax_line_ids)
+        if self.state == 'draft':
+            self.amount_tax = 0.0
+        else:
+            self.amount_tax = sum(round_curr(line.amount) for line in self.tax_line_ids)
         amount_total = self.amount_untaxed + self.amount_tax - self.discount
         self.round_off_amount = self.env['rounding.off'].round_off_value_to_nearest(amount_total)
         self.amount_total = self.amount_untaxed + self.amount_tax - self.discount + self.round_off_amount
@@ -35,6 +38,17 @@ class AccountInvoice(models.Model):
         self.amount_total_company_signed = amount_total_company_signed * sign
         self.amount_total_signed = self.amount_total * sign
         self.amount_untaxed_signed = amount_untaxed_signed * sign
+
+    @api.multi
+    def get_taxes_values(self):
+        """Draft invoices never generate tax lines. Posted ones keep history."""
+        posted = self.filtered(lambda inv: inv.state != 'draft')
+        if not posted:
+            return {}
+        tax_grouped = {}
+        for invoice in posted:
+            tax_grouped.update(super(AccountInvoice, invoice).get_taxes_values())
+        return tax_grouped
 
     discount_type = fields.Selection([('none', 'No Discount'),
                                       ('fixed', 'Fixed'),

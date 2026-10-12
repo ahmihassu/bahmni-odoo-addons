@@ -464,8 +464,7 @@ class OrderSaveService(models.Model):
                     pricelist = sale_obj.pricelist_id.id,
                     uom = prod_obj.uom_id.id
                 )
-                price = self.env['account.tax']._fix_tax_included_price_company(sale_line._get_display_price(prod_obj), prod_obj.taxes_id, sale_line.tax_id, sale_line.company_id)
-                sale_line.price_unit = price
+                sale_line.price_unit = sale_line._get_display_price(prod_obj)
 
             if product_uom_qty != order['quantity']:
                 order['quantity'] = order['quantity'] - product_uom_qty
