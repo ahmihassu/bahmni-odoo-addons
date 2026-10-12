@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <!--
+      Bind/create order types first so <record> tags below never hit
+      order_type_unique_name when rows already exist without XML IDs
+      (e.g. seeded earlier by ensure_default_shops_and_order_types).
+    -->
+    <data noupdate="0">
+        <function model="bahmni.default.shop.setup" name="ensure_order_types"/>
+    </data>
     <data noupdate="1">
         <record id="order_type_registration_fee" model="order.type">
             <field name="name">Registration Fee</field>
