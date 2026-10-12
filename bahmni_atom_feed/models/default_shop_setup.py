@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 import logging
 
-from odoo import api, models
+from psycopg2 import IntegrityError
+
+from odoo import api, models, tools
 
 _logger = logging.getLogger(__name__)
 
@@ -12,6 +14,15 @@ DEFAULT_SHOP_ORDER_TYPES = (
     ('Radiology', 'Radiology Order'),
     ('Procedure', 'Procedure Order'),
     ('IPD', 'Bed Service'),
+)
+
+# XML IDs from order_type_data.xml — kept in sync so upgrades bind existing rows.
+ORDER_TYPE_XMLIDS = (
+    ('order_type_registration_fee', 'Registration Fee'),
+    ('order_type_laboratory_order', 'Lab Order'),
+    ('order_type_radiology_order', 'Radiology Order'),
+    ('order_type_procedure_order', 'Procedure Order'),
+    ('order_type_bed_service', 'Bed Service'),
 )
 
 # Shop name → (account code, account name). Codes use 6 digits for Ethiopia CoA.
@@ -38,21 +49,31 @@ class DefaultShopSetup(models.Model):
         if term:
             return term
         PaymentTerm = self.env['account.payment.term']
+        term = PaymentTerm.search([('name', '=', 'Immediate Payment')], limit=1)
+        if term:
+            return term
         term = PaymentTerm.search([('name', 'ilike', 'Immediate')], limit=1)
         if term:
             return term
         _logger.info("Creating Immediate Payment payment term")
-        return PaymentTerm.create({
-            'name': 'Immediate Payment',
-            'note': 'Immediate Payment',
-            'line_ids': [(0, 0, {
-                'value': 'balance',
-                'value_amount': 0.0,
-                'sequence': 500,
-                'days': 0,
-                'option': 'day_after_invoice_date',
-            })],
-        })
+        try:
+            with self.env.cr.savepoint(), tools.mute_logger('odoo.sql_db'):
+                return PaymentTerm.create({
+                    'name': 'Immediate Payment',
+                    'note': 'Immediate Payment',
+                    'line_ids': [(0, 0, {
+                        'value': 'balance',
+                        'value_amount': 0.0,
+                        'sequence': 500,
+                        'days': 0,
+                        'option': 'day_after_invoice_date',
+                    })],
+                })
+        except IntegrityError:
+            term = PaymentTerm.search([('name', '=', 'Immediate Payment')], limit=1)
+            if term:
+                return term
+            raise
 
     @api.model
     def _get_company_warehouse(self, company):
@@ -95,17 +116,30 @@ class DefaultShopSetup(models.Model):
                 _logger.warning(
                     "Cannot create income account %s: revenue account type missing", code)
                 return self.env['account.account']
-            account = Account.create({
-                'code': code,
-                'name': name,
-                'user_type_id': revenue_type.id,
-                'reconcile': False,
-                'company_id': company.id,
-            })
-            _logger.info(
-                "Created income account %s %s for shop '%s'",
-                code, name, shop.name,
-            )
+            try:
+                with self.env.cr.savepoint(), tools.mute_logger('odoo.sql_db'):
+                    account = Account.create({
+                        'code': code,
+                        'name': name,
+                        'user_type_id': revenue_type.id,
+                        'reconcile': False,
+                        'company_id': company.id,
+                    })
+                _logger.info(
+                    "Created income account %s %s for shop '%s'",
+                    code, name, shop.name,
+                )
+            except IntegrityError:
+                account = Account.search([
+                    ('code', '=', code),
+                    ('company_id', '=', company.id),
+                ], limit=1)
+                if not account:
+                    raise
+                _logger.info(
+                    "Income account %s already exists for company '%s'; reusing",
+                    code, company.name,
+                )
         shop.income_account_id = account.id
         _logger.info(
             "Linked shop '%s' → income account %s %s",
@@ -157,13 +191,111 @@ class DefaultShopSetup(models.Model):
             _logger.info("Renamed order type 'Laboratory Order' → 'Lab Order'")
 
     @api.model
+    def _bind_xmlid(self, xmlid_name, record):
+        """Ensure bahmni_atom_feed.<xmlid_name> points at record (no-op if bound)."""
+        Imd = self.env['ir.model.data']
+        existing = Imd.search([
+            ('module', '=', 'bahmni_atom_feed'),
+            ('name', '=', xmlid_name),
+        ], limit=1)
+        if existing:
+            if existing.model != record._name or existing.res_id != record.id:
+                existing.write({'model': record._name, 'res_id': record.id, 'noupdate': True})
+            return existing
+        return Imd.create({
+            'name': xmlid_name,
+            'module': 'bahmni_atom_feed',
+            'model': record._name,
+            'res_id': record.id,
+            'noupdate': True,
+        })
+
+    @api.model
+    def ensure_order_types(self):
+        """Create missing order types and bind XML IDs. Safe to run on every upgrade."""
+        self._rename_legacy_lab_order_type()
+        OrderType = self.env['order.type']
+        for xmlid_name, name in ORDER_TYPE_XMLIDS:
+            order_type = self.env.ref(
+                'bahmni_atom_feed.%s' % xmlid_name, raise_if_not_found=False)
+            if order_type:
+                if order_type.name != name:
+                    clash = OrderType.search([
+                        ('name', '=', name),
+                        ('id', '!=', order_type.id),
+                    ], limit=1)
+                    if clash:
+                        _logger.info(
+                            "Order type XML ID %s already bound; name '%s' exists as id=%s — skipping rename",
+                            xmlid_name, name, clash.id,
+                        )
+                    else:
+                        order_type.write({'name': name})
+                continue
+
+            order_type = OrderType.search([('name', '=', name)], limit=1)
+            if order_type:
+                _logger.info("Reusing existing order type '%s' (id=%s)", name, order_type.id)
+            else:
+                order_type = OrderType.create({'name': name})
+                _logger.info("Created order type '%s'", name)
+            self._bind_xmlid(xmlid_name, order_type)
+        return True
+
+    @api.model
+    def _find_or_create_shop(self, shop_name, company, warehouse, payment_term):
+        SaleShop = self.env['sale.shop']
+        shop = SaleShop.search([
+            ('name', '=', shop_name),
+            '|',
+            ('company_id', '=', company.id),
+            ('company_id', '=', False),
+        ], limit=1)
+        if shop:
+            if not shop.company_id:
+                shop.company_id = company.id
+            _logger.info(
+                "Reusing existing shop '%s' for company '%s'",
+                shop_name, company.name,
+            )
+            return shop
+        try:
+            with self.env.cr.savepoint(), tools.mute_logger('odoo.sql_db'):
+                shop = SaleShop.create({
+                    'name': shop_name,
+                    'warehouse_id': warehouse.id,
+                    'location_id': warehouse.lot_stock_id.id,
+                    'payment_default_id': payment_term.id,
+                    'company_id': company.id,
+                })
+            _logger.info(
+                "Created shop '%s' for company '%s'",
+                shop_name,
+                company.name,
+            )
+            return shop
+        except IntegrityError:
+            shop = SaleShop.search([
+                ('name', '=', shop_name),
+                '|',
+                ('company_id', '=', company.id),
+                ('company_id', '=', False),
+            ], limit=1)
+            if shop:
+                _logger.info(
+                    "Shop '%s' already exists for company '%s'; skipping create",
+                    shop_name, company.name,
+                )
+                return shop
+            raise
+
+    @api.model
     def ensure_default_shops_and_order_types(self):
         """Create missing order types, shops, and default shop maps (idempotent)."""
         self.ensure_payment_attribute_whitelist()
-        self._rename_legacy_lab_order_type()
+        self.ensure_order_types()
         payment_term = self._get_immediate_payment_term()
         OrderType = self.env['order.type']
-        SaleShop = self.env['sale.shop']
         OrderTypeShopMap = self.env['order.type.shop.map']
 
         for company in self.env['res.company'].search([]):
@@ -188,27 +320,8 @@ class DefaultShopSetup(models.Model):
                     order_type = OrderType.create({'name': order_type_name})
                     _logger.info("Created order type '%s'", order_type_name)
 
-                shop = SaleShop.search([
-                    ('name', '=', shop_name),
-                    '|',
-                    ('company_id', '=', company.id),
-                    ('company_id', '=', False),
-                ], limit=1)
-                if not shop:
-                    shop = SaleShop.create({
-                        'name': shop_name,
-                        'warehouse_id': warehouse.id,
-                        'location_id': warehouse.lot_stock_id.id,
-                        'payment_default_id': payment_term.id,
-                        'company_id': company.id,
-                    })
-                    _logger.info(
-                        "Created shop '%s' for company '%s'",
-                        shop_name,
-                        company.name,
-                    )
-                elif not shop.company_id:
-                    shop.company_id = company.id
+                shop = self._find_or_create_shop(
+                    shop_name, company, warehouse, payment_term)
 
                 self._ensure_shop_income_account(shop, company)
 
@@ -219,16 +332,23 @@ class DefaultShopSetup(models.Model):
                     ('location_name', '=', False),
                 ], limit=1)
                 if not existing_map:
-                    OrderTypeShopMap.create({
-                        'order_type': order_type.id,
-                        'shop_id': shop.id,
-                        'location_id': shop.location_id.id,
-                    })
-                    _logger.info(
-                        "Mapped order type '%s' → shop '%s'",
-                        order_type_name,
-                        shop_name,
-                    )
+                    try:
+                        with self.env.cr.savepoint(), tools.mute_logger('odoo.sql_db'):
+                            OrderTypeShopMap.create({
+                                'order_type': order_type.id,
+                                'shop_id': shop.id,
+                                'location_id': shop.location_id.id,
+                            })
+                        _logger.info(
+                            "Mapped order type '%s' → shop '%s'",
+                            order_type_name,
+                            shop_name,
+                        )
+                    except IntegrityError:
+                        _logger.info(
+                            "Order type map for '%s' already exists; skipping",
+                            order_type_name,
+                        )
 
         self.ensure_demo_cashiers()
         return True
