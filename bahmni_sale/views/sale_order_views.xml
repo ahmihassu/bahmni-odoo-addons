@@ -28,16 +28,10 @@
 			<xpath expr="//notebook/page[1]/group" position="replace">
 				<div class="col-xs-5 pull-right text-right" style="padding-right:0px">
 					<div class="col-xs-6 footer_label" style="min-height: 28px;">
-						<label for="amount_untaxed" />
+						<label for="amount_untaxed" string="Amount"/>
 					</div>
 					<div class="col-xs-6 footer_field" style="min-height: 28px;">
 						 <field name="amount_untaxed"/>
-					</div>
-					<div class="col-xs-6 footer_label" style="min-height: 28px;">
-						<label for="amount_tax"/>
-					</div>
-					<div class="col-xs-6 footer_field" style="min-height: 28px;">
-						 <field name="amount_tax"/>
 					</div>
 					<div class="col-xs-6 footer_label" style="min-height: 28px;">
 						<label for="discount_type"/>
@@ -142,9 +136,8 @@
                 <field name="price_unit"/>
                                         <!--attrs="{'readonly': [('qty_invoiced', '&gt;', 0)]}"/-->
             </xpath>
-            <xpath expr="//field[@name='order_line']/tree/field[@name='tax_id']" position="replace">
-                                    <field name="tax_id" widget="many2many_tags" domain="[('type_tax_use','=','sale'),('company_id','=',parent.company_id)]"/>
-                                        <!--attrs="{'readonly': [('qty_invoiced', '&gt;', 0)]}"/-->
+            <xpath expr="//field[@name='order_line']/tree/field[@name='tax_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
             </xpath>
 		</field>
 	</record>
