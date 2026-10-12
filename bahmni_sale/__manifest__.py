@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Bahmni Sale',
-    'version': '1.23',
+    'version': '1.24',
     'summary': 'Custom Sales module to meet bahmni requirement',
     'sequence': 1,
     'description': """
@@ -21,6 +21,7 @@ Bahmni Sale
              'data/data.xml',
              'data/free_care_account.xml',
              'data/ipd_deposit_data.xml',
+             'data/ipd_bed_fee_products.xml',
              'data/sale_config_setting.xml',
              'data/credit_settlement_data.xml',
              'views/bahmni_sale.xml',

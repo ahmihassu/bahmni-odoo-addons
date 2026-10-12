@@ -151,6 +151,14 @@ class OrderSaveService(models.Model):
 
                 if(len(unprocessed_non_dispensed_order) > 0):
                     _logger.debug("\n Processing Unprocessed non dispensed Orders: %s", list(unprocessed_non_dispensed_order))
+                    # Daily / afternoon bed fees: one SO per OpenMRS order, auto-confirm so
+                    # Cash IPD deposit is deducted the same day (never merge into a draft bag).
+                    if (orderType or '').strip() == 'Bed Service':
+                        for rec in unprocessed_non_dispensed_order:
+                            self._create_and_confirm_bed_fee_order(
+                                cus_id, shop_obj, shop_id, care_setting, provider_name, rec)
+                        continue
+
                     sale_order_ids = self.env['sale.order'].search([('partner_id', '=', cus_id.id),
                                                                     ('shop_id', '=', shop_id),
                                                                     ('state', '=', 'draft'),
@@ -532,6 +540,40 @@ class OrderSaveService(models.Model):
             if(stored_prod_ids):
                 products_in_system.append(order)
         return products_in_system
+
+    @api.model
+    def _create_and_confirm_bed_fee_order(self, partner, shop_obj, shop_id, care_setting,
+                                         provider_name, openmrs_order):
+        """Create a dedicated IPD bed-fee SO and confirm so deposit is applied immediately."""
+        sale_order_vals = {
+            'partner_id': partner.id,
+            'location_id': openmrs_order.get('location_id'),
+            'warehouse_id': openmrs_order.get('warehouse_id'),
+            'care_setting': care_setting or 'ipd',
+            'provider_name': provider_name,
+            'date_order': datetime.strftime(datetime.now(), DTF),
+            'pricelist_id': partner.property_product_pricelist and partner.property_product_pricelist.id or False,
+            'payment_term_id': shop_obj.payment_default_id.id,
+            'project_id': shop_obj.project_id.id if shop_obj.project_id else False,
+            'picking_policy': 'direct',
+            'state': 'draft',
+            'shop_id': shop_id,
+            'origin': 'ATOMFEED SYNC - BED FEE',
+        }
+        if shop_obj.pricelist_id:
+            sale_order_vals['pricelist_id'] = shop_obj.pricelist_id.id
+        sale_order = self.env['sale.order'].create(sale_order_vals)
+        self._process_orders(sale_order, [openmrs_order], openmrs_order)
+        _logger.info(
+            "Bed fee SO %s created for patient %s; confirming to apply IPD deposit",
+            sale_order.id, partner.ref or partner.name)
+        try:
+            sale_order.bahmni_confirm_bed_fee_from_atomfeed()
+        except Exception as err:
+            _logger.exception(
+                "Bed fee SO %s left in draft (confirm failed: %s). Cashier must top-up deposit / confirm.",
+                sale_order.id, err)
+        return sale_order
 
     @api.model
     def _get_product_ids(self, order):

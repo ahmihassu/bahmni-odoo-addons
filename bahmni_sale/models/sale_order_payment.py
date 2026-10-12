@@ -158,6 +158,9 @@ class SaleOrder(models.Model):
     def _bahmni_is_ipd_bed_order(self):
         """True when this SO is billed through the IPD / Bed shop (bed fees never Free-waived)."""
         self.ensure_one()
+        origin = (self.origin or '').strip().upper()
+        if 'BED FEE' in origin:
+            return True
         shop_name = (self.shop_id.name or '').strip() if self.shop_id else ''
         if shop_name == 'IPD':
             return True

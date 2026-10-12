@@ -296,6 +296,40 @@ class SaleOrder(models.Model):
         return invoice_vals
 
 
+    @api.multi
+    def bahmni_confirm_bed_fee_from_atomfeed(self):
+        """Confirm daily bed-fee SO from atom feed: invoice + deduct IPD deposit (no payment wizard)."""
+        self._bahmni_validate_payment_for_confirm()
+        super(SaleOrder, self).action_confirm()
+        self.validate_delivery()
+        for order in self:
+            invoice = order._bahmni_create_and_open_invoice()
+            if order._bahmni_is_credit_flow() or getattr(invoice, 'bahmni_is_credit', False):
+                if (invoice.payment_method or '').strip().lower() != 'credit':
+                    invoice.sudo().write({
+                        'payment_method': order.payment_method or 'Credit',
+                        'credit_information': order.credit_information,
+                        'payer_partner_id': order.payer_partner_id.id,
+                        'patient_partner_id': order.partner_id.id,
+                    })
+                invoice.message_post(body=_(
+                    "Auto bed fee (Credit): receivable on payer '%s'."
+                ) % (order.payer_partner_id.display_name or order.partner_invoice_id.display_name))
+                continue
+            # Cash / Free bed: never waive; settle from IPD deposit when available.
+            order._bahmni_allocate_ipd_deposit_on_invoice(invoice)
+            invoice.invalidate_cache()
+            if invoice.residual > 0.00001:
+                order.message_post(body=_(
+                    "Auto bed fee: invoice %s still has residual %.2f after deposit. "
+                    "Collect top-up / payment."
+                ) % (invoice.number or invoice.id, invoice.residual))
+            else:
+                order.message_post(body=_(
+                    "Auto bed fee: fully settled from IPD deposit (invoice %s)."
+                ) % (invoice.number or invoice.id))
+        return True
+
     #By Pass the Invoice wizard while we press the "Create Invoice" button in sale order afer confirmation.
     #So Once we Confirm the sale order it will create the invoice and ask for the register payment.
     @api.multi
