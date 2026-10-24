@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api
+from odoo.osv import expression
 
 
 class ResPartner(models.Model):
@@ -148,6 +149,29 @@ class ResPartner(models.Model):
             notes=notes, state=state, approved_by=approved_by,
         )
 
+
+    @api.model
+    def name_search(self, name='', args=None, operator='ilike', limit=100):
+        """Return ids only when the caller does not ask for a limited list.
+
+        Quotation search calls this with no limit, then keeps the ids. Building
+        a display name for every match is what makes a short name such as "abe"
+        take several seconds. The dropdown still passes a limit and gets names.
+        """
+        if limit:
+            return super(ResPartner, self).name_search(
+                name, args=args, operator=operator, limit=limit)
+        args = list(args or [])
+        if name and operator in ('=', 'ilike', '=ilike', 'like', '=like'):
+            # Same fields as the standard partner name search.
+            args = expression.AND([args, ['|', '|',
+                ('display_name', operator, name),
+                ('email', operator, name),
+                ('ref', operator, name),
+            ]])
+        elif name:
+            args = expression.AND([args, [('name', operator, name)]])
+        return [(partner_id, '') for partner_id in self.search(args).ids]
 
     # inherited to update display name w.r.t. ref field 
     # and hence user can search customer with reference too
