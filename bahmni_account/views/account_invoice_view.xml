@@ -9,10 +9,16 @@
 			<xpath expr="//notebook/page/group" position="replace">
 				<div class="col-xs-5 pull-right text-right" style="padding-right:0px">
 					<div class="col-xs-6 footer_label" style="min-height: 28px;">
-						<label for="amount_untaxed" string="Amount"/>
+						<label for="amount_untaxed" />
 					</div>
 					<div class="col-xs-6 footer_field" style="min-height: 28px;">
 						 <field name="amount_untaxed"/>
+					</div>
+					<div class="col-xs-6 footer_label" style="min-height: 28px;">
+						<label for="amount_tax"/>
+					</div>
+					<div class="col-xs-6 footer_field" style="min-height: 28px;">
+						 <field name="amount_tax"/>
 					</div>
 					<div class="col-xs-6 footer_label" style="min-height: 28px;">
 						<label for="discount_type"/>
@@ -73,9 +79,6 @@
 					</group>
 				</div>
 			</xpath>
-			<xpath expr="//field[@name='invoice_line_ids']/tree/field[@name='invoice_line_tax_ids']" position="attributes">
-				<attribute name="invisible">1</attribute>
-			</xpath>
 		</field>
 	</record>
 	
@@ -116,10 +119,16 @@
 			<xpath expr="//notebook/page/group" position="replace">
 				<div class="col-xs-5 pull-right text-right" style="padding-right:0px">
 					<div class="col-xs-6 footer_label" style="min-height: 28px;">
-						<label for="amount_untaxed" string="Amount"/>
+						<label for="amount_untaxed" />
 					</div>
 					<div class="col-xs-6 footer_field" style="min-height: 28px;">
 						 <field name="amount_untaxed"/>
+					</div>
+					<div class="col-xs-6 footer_label" style="min-height: 28px;">
+						<label for="amount_tax"/>
+					</div>
+					<div class="col-xs-6 footer_field" style="min-height: 28px;">
+						 <field name="amount_tax"/>
 					</div>
 					<div class="col-xs-6 footer_label" style="min-height: 28px;">
 						<label for="discount_type"/>
@@ -170,9 +179,6 @@
 						</div>
 					</group>
 				</div>
-			</xpath>
-			<xpath expr="//field[@name='invoice_line_ids']/tree/field[@name='invoice_line_tax_ids']" position="attributes">
-				<attribute name="invisible">1</attribute>
 			</xpath>
 		</field>
 	</record>

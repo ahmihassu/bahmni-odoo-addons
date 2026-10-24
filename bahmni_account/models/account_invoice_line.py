@@ -5,25 +5,11 @@ from odoo import models, api, fields
 class AccountInvoiceLine(models.Model):
     _inherit = 'account.invoice.line'
     
-    @api.onchange('product_id')
-    def _onchange_product_id(self):
-        res = super(AccountInvoiceLine, self)._onchange_product_id()
-        self.invoice_line_tax_ids = False
-        return res
-
-    @api.onchange('account_id')
-    def _onchange_account_id(self):
-        res = super(AccountInvoiceLine, self)._onchange_account_id()
-        self.invoice_line_tax_ids = False
-        return res
-
     @api.model
     def create(self, vals):
         '''This method is overridden to update discount amount in invoice,
         when invoice is getting created from sale order, and discount type selected in sale order is percentage.
         Since, discount amount in readonly field and it gets updated by onchange method, which won't get called when invoice is created from backend.'''
-        vals = dict(vals)
-        vals.pop('invoice_line_tax_ids', None)
         if vals.get('invoice_id'):
             invoice_obj = self.env['account.invoice'].browse(vals.get('invoice_id'))
             amount_untaxed = 0.0
@@ -54,18 +40,4 @@ class AccountInvoiceLine(models.Model):
                 discount_amount = (invoice_obj.currency_id.round(amount_untaxed) + 
                                    invoice_obj.currency_id.round(amount_tax)) * invoice_obj.discount_percentage / 100
                 invoice_obj.write({'discount': discount_amount})
-        vals['invoice_line_tax_ids'] = [(6, 0, [])]
         return super(AccountInvoiceLine, self).create(vals)
-
-    @api.multi
-    def write(self, vals):
-        vals = dict(vals)
-        draft = self.filtered(lambda line: not line.invoice_id or line.invoice_id.state == 'draft')
-        posted = self - draft
-        if draft:
-            super(AccountInvoiceLine, draft).write(dict(vals, invoice_line_tax_ids=[(6, 0, [])]))
-        if posted:
-            posted_vals = dict(vals)
-            posted_vals.pop('invoice_line_tax_ids', None)
-            super(AccountInvoiceLine, posted).write(posted_vals)
-        return True
