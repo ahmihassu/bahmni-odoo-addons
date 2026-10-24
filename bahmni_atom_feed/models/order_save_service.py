@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 from itertools import groupby
 import logging
@@ -16,6 +16,31 @@ _logger = logging.getLogger(__name__)
 class OrderSaveService(models.Model):
     _name = 'order.save.service'
     _auto = False
+
+    def _server_today_bounds(self):
+        """Start and end of the current server day, in the clock used for date_order.
+
+        Quotations are stamped with datetime.now(), so the day boundary has to
+        use that same clock. A new order then joins a draft only when that
+        draft was created today.
+        """
+        start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=1)
+        return start.strftime(DTF), end.strftime(DTF)
+
+    def _draft_quotation_domain(self, partner, shop_id, location_id=None, same_day=False):
+        domain = [
+            ('partner_id', '=', partner.id),
+            ('shop_id', '=', shop_id),
+            ('state', '=', 'draft'),
+            ('origin', '=', 'ATOMFEED SYNC'),
+        ]
+        if location_id:
+            domain.append(('location_id', '=', location_id))
+        if same_day:
+            start, end = self._server_today_bounds()
+            domain += [('date_order', '>=', start), ('date_order', '<', end)]
+        return domain
 
     def _get_openerp_orders(self, vals):
         if not vals.get("orders", None):
@@ -159,10 +184,9 @@ class OrderSaveService(models.Model):
                                 cus_id, shop_obj, shop_id, care_setting, provider_name, rec)
                         continue
 
-                    sale_order_ids = self.env['sale.order'].search([('partner_id', '=', cus_id.id),
-                                                                    ('shop_id', '=', shop_id),
-                                                                    ('state', '=', 'draft'),
-                                                                    ('origin', '=', 'ATOMFEED SYNC')])
+                    sale_order_ids = self.env['sale.order'].search(
+                        self._draft_quotation_domain(cus_id, shop_id, same_day=True),
+                        order='date_order desc, id desc', limit=1)
                     if(not sale_order_ids):
                         # Non Dispensed New
                         # replaced create_sale_order method call
@@ -226,11 +250,10 @@ class OrderSaveService(models.Model):
                         _logger.debug("\n For exsiting sale orders for the shop, trying to unlink any openmrs order if any")
                         self._unlink_sale_order_lines_and_remove_empty_orders(sale_order_ids,unprocessed_dispensed_order)
 
-                    sale_order_ids_for_dispensed = self.env['sale.order'].search([('partner_id', '=', cus_id.id),
-                                                                                  ('shop_id', '=', shop_id),
-                                                                                  ('location_id', '=', location_id),
-                                                                                  ('state', '=', 'draft'),
-                                                                                  ('origin', '=', 'ATOMFEED SYNC')])
+                    sale_order_ids_for_dispensed = self.env['sale.order'].search(
+                        self._draft_quotation_domain(
+                            cus_id, shop_id, location_id=location_id, same_day=True),
+                        order='date_order desc, id desc', limit=1)
 
                     if not sale_order_ids_for_dispensed:
                         _logger.debug("\n Could not find any sale_order at specified shop and stock location. Creating a new Sale order for dispensed orders")
